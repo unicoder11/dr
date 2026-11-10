@@ -3,6 +3,7 @@
 import Image from "next/image";
 import Link from "next/link";
 import { motion } from "motion/react";
+import { useAuth } from "@/components/auth/AuthProvider";
 import { Button } from "@/components/ui/Button";
 import { GlassCard, GlassPanel } from "@/components/ui/Glass";
 import { ScrollProgress } from "@/components/motion/ScrollProgress";
@@ -11,6 +12,9 @@ import { brand } from "@/lib/brand";
 const ease = [0.22, 1, 0.36, 1] as const;
 
 export function HomeClient() {
+  const { user } = useAuth();
+  const createHref = user ? "/app/desafios/novo" : "/cadastro";
+
   return (
     <div className="relative min-h-[100svh] overflow-hidden">
       <ScrollProgress />
@@ -114,7 +118,7 @@ export function HomeClient() {
                       Explorar desafios
                       <span aria-hidden>→</span>
                     </Button>
-                    <Button href="/cadastro" variant="ghost">
+                    <Button href={createHref} variant="ghost">
                       Criar meu desafio
                     </Button>
                   </motion.div>
