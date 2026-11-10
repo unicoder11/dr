@@ -121,6 +121,7 @@ export const api = {
     password: string;
     username: string;
     display_name?: string;
+    referral_code?: string;
   }) =>
     request<ApiUser>("/api/v1/auth/register", {
       method: "POST",
@@ -177,4 +178,164 @@ export const api = {
     request<{ status: string }>(`/api/v1/me/notifications/${id}/read`, {
       method: "POST",
     }),
+  slots: (params?: { arena?: string; modality?: string }) => {
+    const q = new URLSearchParams();
+    if (params?.arena) q.set("arena", params.arena);
+    if (params?.modality) q.set("modality", params.modality);
+    const qs = q.toString();
+    return request<Slot[]>(`/api/v1/slots${qs ? `?${qs}` : ""}`);
+  },
+  createBooking: (slot_id: string) =>
+    request<Booking>("/api/v1/bookings", {
+      method: "POST",
+      body: JSON.stringify({ slot_id }),
+    }),
+  myBookings: () => request<Booking[]>("/api/v1/me/bookings"),
+  cancelBooking: (id: string) =>
+    request<Booking>(`/api/v1/bookings/${id}/cancel`, { method: "POST" }),
+  rankings: (params?: { modality?: string; season?: string }) => {
+    const q = new URLSearchParams();
+    if (params?.modality) q.set("modality", params.modality);
+    if (params?.season) q.set("season", params.season);
+    const qs = q.toString();
+    return request<RankingEntry[]>(`/api/v1/rankings${qs ? `?${qs}` : ""}`);
+  },
+  opsAgenda: () => request<OpsAgendaItem[]>("/api/v1/ops/agenda"),
+  opsCheckIn: (body: { participant_id?: string; booking_id?: string }) =>
+    request<{ status: string }>("/api/v1/ops/check-in", {
+      method: "POST",
+      body: JSON.stringify(body),
+    }),
+  opsStartChallenge: (idOrSlug: string) =>
+    request<{ status: string }>(`/api/v1/ops/challenges/${idOrSlug}/start`, {
+      method: "POST",
+    }),
+  opsUpsertResult: (
+    idOrSlug: string,
+    payload: { placements: { user_id: string; position: number }[]; notes?: string },
+  ) =>
+    request<ChallengeResult>(`/api/v1/ops/challenges/${idOrSlug}/results`, {
+      method: "POST",
+      body: JSON.stringify(payload),
+    }),
+  opsValidateResult: (id: string) =>
+    request<ChallengeResult>(`/api/v1/ops/results/${id}/validate`, {
+      method: "POST",
+    }),
+  challengeResult: (idOrSlug: string) =>
+    request<ChallengeResult>(`/api/v1/challenges/${idOrSlug}/results`),
+  profile: (username: string) => request<PublicProfile>(`/api/v1/users/${username}`),
+  follow: (username: string) =>
+    request<{ status: string }>(`/api/v1/users/${username}/follow`, { method: "POST" }),
+  unfollow: (username: string) =>
+    request<{ status: string }>(`/api/v1/users/${username}/follow`, { method: "DELETE" }),
+  followers: (username: string) =>
+    request<FollowUser[]>(`/api/v1/users/${username}/followers`),
+  following: (username: string) =>
+    request<FollowUser[]>(`/api/v1/users/${username}/following`),
+  myReferral: () => request<ReferralStats>("/api/v1/me/referral"),
+  myAchievements: () => request<Achievement[]>("/api/v1/me/achievements"),
+};
+
+export type Achievement = {
+  slug: string;
+  name: string;
+  description: string;
+  icon: string;
+  earned_at: string;
+};
+
+export type PublicProfile = {
+  user_id: string;
+  username: string;
+  display_name: string;
+  bio: string;
+  city: string;
+  followers_count: number;
+  following_count: number;
+  is_following: boolean;
+  achievements: Achievement[];
+  referral_code?: string;
+};
+
+export type FollowUser = {
+  username: string;
+  display_name: string;
+};
+
+export type ReferralStats = {
+  code: string;
+  share_url: string;
+  signups: number;
+};
+
+export type RankingEntry = {
+  user_id: string;
+  username: string;
+  display_name: string;
+  points: number;
+  wins: number;
+  participations: number;
+  rank_position: number;
+  modality_slug?: string | null;
+  season: string;
+};
+
+export type OpsAgendaItem = {
+  kind: string;
+  id: string;
+  title: string;
+  starts_at: string;
+  status: string;
+  slug?: string;
+  modality_name?: string;
+  user_display_name?: string;
+  username?: string;
+};
+
+export type ChallengeResult = {
+  id: string;
+  challenge_id: string;
+  challenge_slug: string;
+  challenge_title: string;
+  payload: {
+    placements: { user_id: string; position: number }[];
+    notes?: string;
+  };
+  status: string;
+  validated_by?: string;
+  validated_at?: string;
+};
+
+export type Slot = {
+  id: string;
+  arena_id: string;
+  arena_name: string;
+  modality_id: string;
+  modality_slug: string;
+  modality_name: string;
+  starts_at: string;
+  ends_at: string;
+  capacity: number;
+  booked_count: number;
+  price_cents: number;
+  status: string;
+  available: boolean;
+};
+
+export type Booking = {
+  id: string;
+  user_id: string;
+  arena_id: string;
+  arena_name: string;
+  slot_id?: string;
+  starts_at?: string;
+  ends_at?: string;
+  modality_name?: string;
+  status: string;
+  amount_cents: number;
+  currency: string;
+  mp_preference_id?: string;
+  checkout_url?: string;
+  created_at: string;
 };

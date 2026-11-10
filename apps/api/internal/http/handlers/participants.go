@@ -7,6 +7,7 @@ import (
 
 	"github.com/desafiosreais/dr/apps/api/internal/http/middleware"
 	"github.com/desafiosreais/dr/apps/api/internal/modules/challenges"
+	"github.com/desafiosreais/dr/apps/api/internal/modules/community"
 	"github.com/desafiosreais/dr/apps/api/internal/modules/notifications"
 	"github.com/google/uuid"
 )
@@ -14,6 +15,7 @@ import (
 type ParticipantsHandler struct {
 	Challenges *challenges.Service
 	Notifs     *notifications.Service
+	Community  *community.Service
 }
 
 func (h ParticipantsHandler) actor(r *http.Request) (challenges.IdentityActor, bool) {
@@ -44,6 +46,9 @@ func (h ParticipantsHandler) Join(w http.ResponseWriter, r *http.Request) {
 	if err != nil {
 		mapParticipantErr(w, err)
 		return
+	}
+	if h.Community != nil {
+		_ = h.Community.GrantAchievement(r.Context(), actor.ID, "challenger")
 	}
 	writeJSON(w, http.StatusOK, p)
 }

@@ -8,11 +8,13 @@ import (
 
 	"github.com/desafiosreais/dr/apps/api/internal/http/middleware"
 	"github.com/desafiosreais/dr/apps/api/internal/modules/challenges"
+	"github.com/desafiosreais/dr/apps/api/internal/modules/community"
 	"github.com/google/uuid"
 )
 
 type ChallengesHandler struct {
-	Svc *challenges.Service
+	Svc       *challenges.Service
+	Community *community.Service
 }
 
 func (h ChallengesHandler) actor(r *http.Request) challenges.IdentityActor {
@@ -167,6 +169,9 @@ func (h ChallengesHandler) Transition(w http.ResponseWriter, r *http.Request) {
 	if err != nil {
 		mapChallengeErr(w, err)
 		return
+	}
+	if h.Community != nil && body.Status == challenges.StatusPublished {
+		_ = h.Community.GrantAchievement(r.Context(), u.ID, "challenger")
 	}
 	writeJSON(w, http.StatusOK, ch)
 }

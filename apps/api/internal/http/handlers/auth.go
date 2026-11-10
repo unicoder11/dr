@@ -8,19 +8,22 @@ import (
 
 	"github.com/desafiosreais/dr/apps/api/internal/auth"
 	"github.com/desafiosreais/dr/apps/api/internal/http/middleware"
+	"github.com/desafiosreais/dr/apps/api/internal/modules/community"
 	"github.com/desafiosreais/dr/apps/api/internal/modules/identity"
 )
 
 type AuthHandler struct {
-	Identity *identity.Service
-	Secure   bool
+	Identity  *identity.Service
+	Community *community.Service
+	Secure    bool
 }
 
 type registerReq struct {
-	Email       string `json:"email"`
-	Password    string `json:"password"`
-	Username    string `json:"username"`
-	DisplayName string `json:"display_name"`
+	Email        string `json:"email"`
+	Password     string `json:"password"`
+	Username     string `json:"username"`
+	DisplayName  string `json:"display_name"`
+	ReferralCode string `json:"referral_code"`
 }
 
 type loginReq struct {
@@ -50,6 +53,13 @@ func (h AuthHandler) Register(w http.ResponseWriter, r *http.Request) {
 			writeJSON(w, http.StatusBadRequest, map[string]string{"error": err.Error()})
 		}
 		return
+	}
+	if h.Community != nil {
+		_ = h.Community.GrantFirstSteps(r.Context(), user.ID)
+		_, _ = h.Community.EnsureReferralCode(r.Context(), user.ID)
+		if req.ReferralCode != "" {
+			_ = h.Community.AttributeReferral(r.Context(), user.ID, req.ReferralCode)
+		}
 	}
 	writeJSON(w, http.StatusCreated, user)
 }

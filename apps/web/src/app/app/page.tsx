@@ -38,8 +38,20 @@ export default function AppHubPage() {
     <div className="mx-auto max-w-4xl px-6 py-28">
       <p className="text-lime font-display tracking-widest">HUB</p>
       <h1 className="mt-2 font-display text-5xl text-white">Olá, {user.display_name}</h1>
-      <p className="mt-2 text-silver">@{user.username}</p>
+      <p className="mt-2 text-silver">
+        <Link href={`/u/${user.username}`} className="hover:text-lime">
+          @{user.username}
+        </Link>
+      </p>
       <div className="mt-10 grid gap-4 sm:grid-cols-2">
+        <Link className="border border-white/10 p-5 hover:border-lime" href={`/u/${user.username}`}>
+          <h2 className="font-display text-2xl text-white">Meu perfil</h2>
+          <p className="mt-1 text-sm text-silver">Seguidores e conquistas</p>
+        </Link>
+        <Link className="border border-white/10 p-5 hover:border-lime" href="/app/indicacao">
+          <h2 className="font-display text-2xl text-white">Indicação</h2>
+          <p className="mt-1 text-sm text-silver">Link de referral</p>
+        </Link>
         <Link className="border border-white/10 p-5 hover:border-lime" href="/desafios">
           <h2 className="font-display text-2xl text-white">Desafios</h2>
           <p className="mt-1 text-sm text-silver">Explorar marketplace</p>
@@ -60,16 +72,28 @@ export default function AppHubPage() {
           <h2 className="font-display text-2xl text-white">Notificações</h2>
           <p className="mt-1 text-sm text-silver">Alertas in-app</p>
         </Link>
-        <Link className="border border-white/10 p-5 hover:border-lime" href="/arena">
+        <Link className="border border-white/10 p-5 hover:border-lime" href="/app/reservas">
           <h2 className="font-display text-2xl text-white">Reservas</h2>
-          <p className="mt-1 text-sm text-silver">Super Mountain Kart</p>
+          <p className="mt-1 text-sm text-silver">Slots SMK + pagamento</p>
         </Link>
+        {user.roles.some((r) =>
+          ["admin", "organizer", "arena_operator"].includes(r),
+        ) && (
+          <Link className="border border-lime/40 p-5 hover:border-lime" href="/ops">
+            <h2 className="font-display text-2xl text-white">Ops</h2>
+            <p className="mt-1 text-sm text-silver">Check-in e resultados</p>
+          </Link>
+        )}
         {user.roles.includes("admin") && (
           <Link className="border border-lime/40 p-5 hover:border-lime" href="/admin">
             <h2 className="font-display text-2xl text-white">Admin</h2>
             <p className="mt-1 text-sm text-silver">Usuários e flags</p>
           </Link>
         )}
+        <Link className="border border-white/10 p-5 hover:border-lime" href="/rankings">
+          <h2 className="font-display text-2xl text-white">Rankings</h2>
+          <p className="mt-1 text-sm text-silver">Classificação</p>
+        </Link>
       </div>
       <button
         className="mt-10 text-sm text-silver underline hover:text-lime"

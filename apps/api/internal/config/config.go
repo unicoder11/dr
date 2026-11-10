@@ -8,32 +8,38 @@ import (
 )
 
 type Config struct {
-	Addr            string
-	PublicURL       string
-	AppEnv          string
-	DatabaseURL     string
-	RedisURL        string
-	SessionSecret   string
-	CORSOrigins     []string
-	AdminEmail      string
-	AdminPassword   string
-	AdminUsername   string
-	FlagP2PPrizes   bool
+	Addr              string
+	PublicURL         string
+	SiteURL           string
+	AppEnv            string
+	DatabaseURL       string
+	RedisURL          string
+	SessionSecret     string
+	CORSOrigins       []string
+	AdminEmail        string
+	AdminPassword     string
+	AdminUsername     string
+	FlagP2PPrizes     bool
+	MPAccessToken     string
+	MPWebhookSecret   string
 }
 
 func Load() (Config, error) {
 	cfg := Config{
-		Addr:          getEnv("API_ADDR", ":8080"),
-		PublicURL:     getEnv("API_PUBLIC_URL", "http://localhost:8080"),
-		AppEnv:        getEnv("APP_ENV", "development"),
-		DatabaseURL:   os.Getenv("DATABASE_URL"),
-		RedisURL:      getEnv("REDIS_URL", "redis://localhost:6379/0"),
-		SessionSecret: os.Getenv("SESSION_SECRET"),
-		CORSOrigins:   splitCSV(getEnv("CORS_ORIGINS", "http://localhost:3000")),
-		AdminEmail:    os.Getenv("ADMIN_EMAIL"),
-		AdminPassword: os.Getenv("ADMIN_PASSWORD"),
-		AdminUsername: getEnv("ADMIN_USERNAME", "admin"),
-		FlagP2PPrizes: getEnvBool("FLAG_PAYMENTS_P2P_PRIZES", false),
+		Addr:            getEnv("API_ADDR", ":8080"),
+		PublicURL:       getEnv("API_PUBLIC_URL", "http://localhost:8080"),
+		SiteURL:         getEnv("NEXT_PUBLIC_SITE_URL", "http://localhost:3000"),
+		AppEnv:          getEnv("APP_ENV", "development"),
+		DatabaseURL:     os.Getenv("DATABASE_URL"),
+		RedisURL:        getEnv("REDIS_URL", "redis://localhost:6379/0"),
+		SessionSecret:   os.Getenv("SESSION_SECRET"),
+		CORSOrigins:     splitCSV(getEnv("CORS_ORIGINS", "http://localhost:3000")),
+		AdminEmail:      os.Getenv("ADMIN_EMAIL"),
+		AdminPassword:   os.Getenv("ADMIN_PASSWORD"),
+		AdminUsername:   getEnv("ADMIN_USERNAME", "admin"),
+		FlagP2PPrizes:   getEnvBool("FLAG_PAYMENTS_P2P_PRIZES", false),
+		MPAccessToken:   os.Getenv("MERCADOPAGO_ACCESS_TOKEN"),
+		MPWebhookSecret: os.Getenv("MERCADOPAGO_WEBHOOK_SECRET"),
 	}
 
 	if cfg.SessionSecret == "" {

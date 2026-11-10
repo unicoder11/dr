@@ -17,6 +17,9 @@ export function SiteHeader() {
           <Link href="/modalidades" className="transition hover:text-lime">
             Modalidades
           </Link>
+          <Link href="/rankings" className="transition hover:text-lime">
+            Rankings
+          </Link>
           <Link href="/entrar" className="transition hover:text-lime">
             Entrar
           </Link>
