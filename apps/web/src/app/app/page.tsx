@@ -1,25 +1,16 @@
 "use client";
 
-import { useEffect, useState } from "react";
 import Link from "next/link";
-import { api, type ApiUser } from "@/lib/api";
+import { useAuth } from "@/components/auth/AuthProvider";
 import { Button } from "@/components/ui/Button";
 
 export default function AppHubPage() {
-  const [user, setUser] = useState<ApiUser | null>(null);
-  const [error, setError] = useState<string | null>(null);
+  const { user, loading, logout } = useAuth();
 
-  useEffect(() => {
-    api
-      .me()
-      .then(setUser)
-      .catch(() => setError("Faça login para acessar o hub."));
-  }, []);
-
-  if (error) {
+  if (!loading && !user) {
     return (
       <div className="mx-auto max-w-lg px-6 py-32 text-center">
-        <p className="text-silver">{error}</p>
+        <p className="text-silver">Faça login para acessar o hub.</p>
         <div className="mt-6 flex justify-center gap-3">
           <Button href="/entrar">Entrar</Button>
           <Button href="/cadastro" variant="ghost">
@@ -30,7 +21,7 @@ export default function AppHubPage() {
     );
   }
 
-  if (!user) {
+  if (loading || !user) {
     return <div className="px-6 py-32 text-center text-silver">Carregando...</div>;
   }
 
@@ -106,7 +97,7 @@ export default function AppHubPage() {
       <button
         className="mt-10 text-sm text-silver underline hover:text-lime"
         onClick={async () => {
-          await api.logout();
+          await logout();
           window.location.href = "/";
         }}
       >

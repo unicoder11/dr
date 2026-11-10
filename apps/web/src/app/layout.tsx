@@ -1,5 +1,6 @@
 import type { Metadata } from "next";
 import { Anton, Montserrat } from "next/font/google";
+import { AuthProvider } from "@/components/auth/AuthProvider";
 import { SiteFooter } from "@/components/layout/SiteFooter";
 import { SiteHeader } from "@/components/layout/SiteHeader";
 import "./globals.css";
@@ -48,9 +49,11 @@ export default function RootLayout({
   return (
     <html lang="pt-BR">
       <body className={`${display.variable} ${body.variable} font-body antialiased bg-racing text-white`}>
-        <SiteHeader />
-        <main>{children}</main>
-        <SiteFooter />
+        <AuthProvider>
+          <SiteHeader />
+          <main>{children}</main>
+          <SiteFooter />
+        </AuthProvider>
       </body>
     </html>
   );

@@ -13,6 +13,7 @@ import { useRouter, useSearchParams } from "next/navigation";
 import { AnimatePresence, motion, useReducedMotion } from "motion/react";
 import { api } from "@/lib/api";
 import { brand } from "@/lib/brand";
+import { useAuth } from "@/components/auth/AuthProvider";
 import { Button } from "@/components/ui/Button";
 import { GlassPanel } from "@/components/ui/Glass";
 import { GlassShell } from "@/components/layout/GlassShell";
@@ -63,6 +64,7 @@ const ease = [0.22, 1, 0.36, 1] as const;
 export function CadastroClient() {
   const router = useRouter();
   const params = useSearchParams();
+  const { setUser, refresh } = useAuth();
   const reduce = useReducedMotion();
   const refCode = params.get("ref") || "";
 
@@ -170,10 +172,10 @@ export function CadastroClient() {
       });
       // Register already sets the session cookie; login is a safe fallback
       // for older API deploys that only create the user.
-      try {
-        await api.me();
-      } catch {
-        await api.login({ email, password });
+      let session = await refresh();
+      if (!session) {
+        session = await api.login({ email, password });
+        setUser(session);
       }
       setDone(true);
       window.setTimeout(() => router.push("/app"), reduce ? 400 : 1100);

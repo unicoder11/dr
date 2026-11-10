@@ -4,6 +4,7 @@ import { FormEvent, Suspense, useState } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import Link from "next/link";
 import { api } from "@/lib/api";
+import { useAuth } from "@/components/auth/AuthProvider";
 import { Button } from "@/components/ui/Button";
 import { GlassPanel } from "@/components/ui/Glass";
 import { GlassShell } from "@/components/layout/GlassShell";
@@ -20,6 +21,7 @@ export default function EntrarPage() {
 function EntrarForm() {
   const router = useRouter();
   const params = useSearchParams();
+  const { setUser } = useAuth();
   const next = params.get("next") || "";
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
@@ -34,6 +36,7 @@ function EntrarForm() {
         email: String(fd.get("email") || ""),
         password: String(fd.get("password") || ""),
       });
+      setUser(user);
       if (next.startsWith("/")) {
         router.push(next);
       } else if (user.roles.includes("admin")) {
