@@ -23,6 +23,17 @@ export default function ContatoPage() {
           </a>
           . Respostas em dias úteis.
         </p>
+        <p className="mt-5 max-w-xl text-sm leading-relaxed text-silver md:text-base">
+          No Instagram:{" "}
+          <a
+            className="font-semibold text-lime hover:brightness-110"
+            href={brand.social.instagram}
+            target="_blank"
+            rel="noopener noreferrer"
+          >
+            @desafiosreais
+          </a>
+        </p>
       </GlassPanel>
     </GlassShell>
   );

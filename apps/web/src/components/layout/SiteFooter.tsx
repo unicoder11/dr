@@ -28,6 +28,14 @@ export function SiteFooter() {
           <Link href="/contato" className="hover:text-lime">
             Contato
           </Link>
+          <a
+            href={brand.social.instagram}
+            target="_blank"
+            rel="noopener noreferrer"
+            className="hover:text-lime"
+          >
+            Instagram
+          </a>
           <Link href="/privacidade" className="hover:text-lime">
             Privacidade
           </Link>
