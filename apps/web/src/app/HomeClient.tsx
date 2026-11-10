@@ -5,7 +5,6 @@ import Link from "next/link";
 import { motion } from "motion/react";
 import { Button } from "@/components/ui/Button";
 import { GlassCard, GlassPanel } from "@/components/ui/Glass";
-import { LiveSpark } from "@/components/motion/LiveSpark";
 import { ScrollProgress } from "@/components/motion/ScrollProgress";
 import { brand } from "@/lib/brand";
 
@@ -26,11 +25,11 @@ export function HomeClient() {
           sizes="100vw"
         />
         <div className="absolute inset-0 bg-racing/70" />
-        <div className="animate-glow-breathe absolute -left-20 top-1/4 h-80 w-80 rounded-full bg-lime/25" />
-        <div className="animate-ember-drift absolute bottom-10 right-0 h-72 w-72 rounded-full bg-gold/20" />
+        <div className="animate-glow-breathe absolute -left-20 top-1/4 hidden h-80 w-80 rounded-full bg-lime/20 md:block" />
+        <div className="animate-ember-drift absolute bottom-10 right-0 hidden h-72 w-72 rounded-full bg-gold/15 md:block" />
       </div>
 
-      <div className="mx-auto max-w-[1280px] px-3 pb-8 pt-24 md:px-6 md:pb-10 md:pt-28">
+      <div className="mx-auto max-w-[1280px] px-3 pb-6 pt-[5.5rem] md:px-6 md:pb-10 md:pt-28">
         <motion.div
           initial={{ opacity: 0, y: 28, scale: 0.98 }}
           animate={{ opacity: 1, y: 0, scale: 1 }}
@@ -49,19 +48,17 @@ export function HomeClient() {
               />
               <div className="absolute inset-0 bg-gradient-to-r from-racing via-racing/80 to-racing/15" />
               <div className="absolute inset-0 bg-gradient-to-t from-racing via-transparent to-racing/30" />
-              <LiveSpark className="opacity-50" />
-
               <motion.span
                 aria-hidden
-                className="outline-number pointer-events-none absolute -right-4 bottom-16 z-[1] text-[11rem] opacity-70 md:right-8 md:text-[16rem] lg:text-[18rem]"
+                className="outline-number pointer-events-none absolute -right-2 bottom-24 z-[1] hidden text-[14rem] opacity-60 sm:block md:right-6 md:text-[16rem] lg:text-[18rem]"
                 initial={{ opacity: 0, scale: 0.92 }}
-                animate={{ opacity: 0.7, scale: 1 }}
+                animate={{ opacity: 0.6, scale: 1 }}
                 transition={{ delay: 0.35, duration: 1, ease }}
               >
                 01
               </motion.span>
 
-              <div className="relative z-10 flex h-full min-h-[68vh] flex-col justify-end p-6 pb-8 md:min-h-[72vh] md:p-10 md:pb-12 lg:p-12">
+              <div className="relative z-10 flex h-full min-h-[68vh] flex-col justify-end p-5 pb-7 md:min-h-[72vh] md:p-10 md:pb-12 lg:p-12">
                 <div className="max-w-xl">
                   <motion.div
                     initial={{ opacity: 0, y: 16 }}
@@ -74,12 +71,12 @@ export function HomeClient() {
                       width={380}
                       height={120}
                       priority
-                      className="logo-mark h-12 w-auto md:h-16 lg:h-[4.5rem]"
+                      className="logo-mark h-11 w-auto sm:h-12 md:h-16 lg:h-[4.5rem]"
                     />
                   </motion.div>
 
                   <motion.p
-                    className="mt-6 text-[11px] font-semibold uppercase tracking-[0.42em] text-lime"
+                    className="mt-5 text-[10px] font-semibold uppercase tracking-[0.35em] text-lime sm:mt-6 sm:text-[11px] sm:tracking-[0.42em]"
                     initial={{ opacity: 0 }}
                     animate={{ opacity: 1 }}
                     transition={{ delay: 0.28 }}
@@ -88,7 +85,7 @@ export function HomeClient() {
                   </motion.p>
 
                   <motion.h1
-                    className="mt-3 font-display text-5xl uppercase leading-[0.92] tracking-wide text-white md:text-7xl lg:text-8xl"
+                    className="mt-3 font-display text-[2.65rem] uppercase leading-[0.92] tracking-wide text-white sm:text-5xl md:text-7xl lg:text-8xl"
                     initial={{ opacity: 0, y: 28 }}
                     animate={{ opacity: 1, y: 0 }}
                     transition={{ delay: 0.32, duration: 0.85, ease }}
@@ -134,7 +131,7 @@ export function HomeClient() {
               </div>
             </div>
 
-            <div className="relative z-10 grid gap-3 border-t border-white/10 bg-black/25 p-4 backdrop-blur-md md:grid-cols-3 md:gap-4 md:p-5">
+            <div className="relative z-10 grid gap-3 border-t border-white/10 bg-black/25 p-3 backdrop-blur-md sm:p-4 md:grid-cols-3 md:gap-4 md:p-5">
               <DashCard
                 href="/desafios"
                 eyebrow="PRÓXIMO"
@@ -196,16 +193,18 @@ export function HomeClient() {
             </div>
 
             <motion.div
-              className="relative z-10 flex flex-col items-center justify-between gap-3 border-t border-white/10 px-4 py-3 sm:flex-row sm:px-5"
+              className="relative z-10 flex flex-col gap-3 border-t border-white/10 px-4 py-3 sm:flex-row sm:items-center sm:justify-between sm:px-5"
               initial={{ opacity: 0, y: 12 }}
               animate={{ opacity: 1, y: 0 }}
               transition={{ delay: 1.05, duration: 0.7, ease }}
             >
               <div className="flex items-center gap-3 text-sm text-silver">
-                <span className="inline-block h-2 w-2 animate-pulse rounded-full bg-lime shadow-[0_0_10px_rgba(199,240,0,0.8)]" />
-                A emoção é real — Desafie. Compita. Vença.
+                <CheckeredMark />
+                <span className="leading-snug">
+                  A emoção é real — Desafie. Compita. Vença.
+                </span>
               </div>
-              <div className="flex items-center gap-2">
+              <div className="flex flex-wrap items-center gap-2">
                 <Link
                   href="/arenas"
                   className="rounded-full px-3 py-1.5 text-sm text-silver transition hover:text-white"
@@ -224,6 +223,23 @@ export function HomeClient() {
         </motion.div>
       </div>
     </div>
+  );
+}
+
+function CheckeredMark() {
+  return (
+    <span
+      aria-hidden
+      className="grid shrink-0 grid-cols-2 gap-px overflow-hidden rounded-[2px]"
+      style={{ width: 12, height: 18 }}
+    >
+      <span className="bg-white" />
+      <span className="bg-racing" />
+      <span className="bg-racing" />
+      <span className="bg-white" />
+      <span className="bg-white" />
+      <span className="bg-racing" />
+    </span>
   );
 }
 

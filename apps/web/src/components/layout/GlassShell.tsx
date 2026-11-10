@@ -28,7 +28,9 @@ export function GlassShell({
         <div className="absolute inset-0 bg-racing/70" />
         <div className="animate-glow-breathe absolute -left-16 top-1/3 h-72 w-72 rounded-full bg-lime/20" />
       </div>
-      <div className="mx-auto max-w-[1280px] px-3 pb-10 pt-24 md:px-6 md:pt-28">{children}</div>
+      <div className="mx-auto max-w-[1280px] px-3 pb-8 pt-[5.5rem] md:px-6 md:pb-10 md:pt-28">
+        {children}
+      </div>
     </div>
   );
 }
