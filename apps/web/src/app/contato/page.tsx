@@ -18,8 +18,8 @@ export default function ContatoPage() {
       <GlassPanel className="mt-4 p-6 md:p-10">
         <p className="max-w-xl text-sm leading-relaxed text-silver md:text-base">
           Escreva para{" "}
-          <a className="font-semibold text-lime hover:brightness-110" href="mailto:ola@desafiosreais.local">
-            ola@desafiosreais.local
+          <a className="font-semibold text-lime hover:brightness-110" href="mailto:oi@desafiosreais.com">
+            oi@desafiosreais.com
           </a>
           . Respostas em dias úteis.
         </p>
