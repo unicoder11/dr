@@ -1,6 +1,7 @@
 package handlers
 
 import (
+	"context"
 	"encoding/json"
 	"errors"
 	"net/http"
@@ -11,7 +12,12 @@ import (
 )
 
 type OpsHandler struct {
-	Svc *ops.Service
+	Svc       *ops.Service
+	Community championGranter
+}
+
+type championGranter interface {
+	GrantAchievement(ctx context.Context, userID uuid.UUID, slug string) error
 }
 
 func (h OpsHandler) actor(r *http.Request) (ops.Actor, bool) {
@@ -116,6 +122,13 @@ func (h OpsHandler) ValidateResult(w http.ResponseWriter, r *http.Request) {
 	if err != nil {
 		mapOpsErr(w, err)
 		return
+	}
+	if h.Community != nil {
+		for _, p := range res.Payload.Placements {
+			if p.Position == 1 {
+				_ = h.Community.GrantAchievement(r.Context(), p.UserID, "champion")
+			}
+		}
 	}
 	writeJSON(w, http.StatusOK, res)
 }

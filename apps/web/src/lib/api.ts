@@ -20,7 +20,14 @@ export type Arena = {
   id: string;
   slug: string;
   name: string;
+  description?: string;
+  address?: Record<string, string> | unknown;
+  timezone?: string;
   is_published: boolean;
+  capacity_default?: number;
+  modalities?: { id: string; slug: string; name: string }[];
+  open_slots?: number;
+  upcoming_challenges?: number;
 };
 
 export type Challenge = {
@@ -43,6 +50,8 @@ export type Challenge = {
   confirmed_count: number;
   starts_at: string;
   ends_at?: string | null;
+  cover_asset_id?: string | null;
+  cover_url?: string;
   is_demo: boolean;
   derived: {
     scheduled: boolean;
@@ -51,6 +60,37 @@ export type Challenge = {
   };
   created_at: string;
   updated_at: string;
+};
+
+export type MediaAsset = {
+  id: string;
+  owner_user_id: string;
+  bucket_key: string;
+  content_type: string;
+  bytes: number;
+  purpose: string;
+  title: string;
+  is_public: boolean;
+  status: string;
+  url: string;
+  created_at: string;
+};
+
+export type LiveStream = {
+  id: string;
+  title: string;
+  description: string;
+  arena_id?: string;
+  arena_slug?: string;
+  arena_name?: string;
+  challenge_id?: string;
+  cover_asset_id?: string;
+  cover_url?: string;
+  stream_url: string;
+  status: string;
+  starts_at?: string | null;
+  is_demo: boolean;
+  created_at: string;
 };
 
 export type ChallengeInput = {
@@ -136,10 +176,13 @@ export const api = {
   me: () => request<ApiUser>("/api/v1/auth/me"),
   adminUsers: () => request<unknown[]>("/api/v1/admin/users"),
   modalities: () => request<Modality[]>("/api/v1/modalities"),
-  arenas: () => request<Arena[]>("/api/v1/arenas"),
-  challenges: (params?: { modality?: string; mine?: boolean }) => {
+  arenas: (all?: boolean) =>
+    request<Arena[]>(`/api/v1/arenas${all ? "?all=1" : ""}`),
+  arena: (slug: string) => request<Arena>(`/api/v1/arenas/${slug}`),
+  challenges: (params?: { modality?: string; arena?: string; mine?: boolean }) => {
     const q = new URLSearchParams();
     if (params?.modality) q.set("modality", params.modality);
+    if (params?.arena) q.set("arena", params.arena);
     if (params?.mine) q.set("mine", "1");
     const qs = q.toString();
     return request<Challenge[]>(`/api/v1/challenges${qs ? `?${qs}` : ""}`);
@@ -155,6 +198,28 @@ export const api = {
       method: "POST",
       body: JSON.stringify({ status }),
     }),
+  setChallengeCover: (idOrSlug: string, asset_id: string) =>
+    request<Challenge>(`/api/v1/challenges/${idOrSlug}/cover`, {
+      method: "POST",
+      body: JSON.stringify({ asset_id }),
+    }),
+  uploadMedia: async (file: File, purpose = "cover", title = "") => {
+    const fd = new FormData();
+    fd.append("file", file);
+    fd.append("purpose", purpose);
+    if (title) fd.append("title", title);
+    const res = await fetch(`${API_URL}/api/v1/media/upload`, {
+      method: "POST",
+      credentials: "include",
+      body: fd,
+    });
+    const data = await res.json().catch(() => ({}));
+    if (!res.ok) {
+      throw new Error((data as { error?: string }).error || `http_${res.status}`);
+    }
+    return data as MediaAsset;
+  },
+  liveStreams: () => request<LiveStream[]>("/api/v1/live"),
   participants: (idOrSlug: string) =>
     request<Participant[]>(`/api/v1/challenges/${idOrSlug}/participants`),
   joinChallenge: (idOrSlug: string) =>
@@ -235,6 +300,41 @@ export const api = {
     request<FollowUser[]>(`/api/v1/users/${username}/following`),
   myReferral: () => request<ReferralStats>("/api/v1/me/referral"),
   myAchievements: () => request<Achievement[]>("/api/v1/me/achievements"),
+  creatorStats: (username: string) =>
+    request<CreatorStats>(`/api/v1/users/${username}/stats`),
+  influencers: () => request<InfluencerRow[]>("/api/v1/influencers"),
+  trackView: (idOrSlug: string, viewer_key?: string) =>
+    request<{ status: string }>(`/api/v1/challenges/${idOrSlug}/views`, {
+      method: "POST",
+      body: JSON.stringify({ viewer_key: viewer_key || "" }),
+    }),
+  trackShare: (idOrSlug: string, channel = "link") =>
+    request<{ status: string }>(`/api/v1/challenges/${idOrSlug}/shares`, {
+      method: "POST",
+      body: JSON.stringify({ channel }),
+    }),
+};
+
+export type CreatorStats = {
+  username: string;
+  followers_count: number;
+  following_count: number;
+  challenges_created: number;
+  challenges_published: number;
+  total_views: number;
+  total_shares: number;
+  referral_signups: number;
+  wins: number;
+};
+
+export type InfluencerRow = {
+  username: string;
+  display_name: string;
+  followers_count: number;
+  referral_signups: number;
+  total_views: number;
+  challenges_published: number;
+  score: number;
 };
 
 export type Achievement = {

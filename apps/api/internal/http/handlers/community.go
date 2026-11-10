@@ -1,6 +1,7 @@
 package handlers
 
 import (
+	"encoding/json"
 	"errors"
 	"net/http"
 	"strings"
@@ -100,6 +101,72 @@ func (h CommunityHandler) MyAchievements(w http.ResponseWriter, r *http.Request)
 		return
 	}
 	writeJSON(w, http.StatusOK, list)
+}
+
+func (h CommunityHandler) CreatorStats(w http.ResponseWriter, r *http.Request) {
+	stats, err := h.Svc.CreatorStats(r.Context(), r.PathValue("username"))
+	if err != nil {
+		mapCommunityErr(w, err)
+		return
+	}
+	writeJSON(w, http.StatusOK, stats)
+}
+
+func (h CommunityHandler) Influencers(w http.ResponseWriter, r *http.Request) {
+	list, err := h.Svc.InfluencerLeaderboard(r.Context(), 20)
+	if err != nil {
+		writeJSON(w, http.StatusInternalServerError, map[string]string{"error": "internal"})
+		return
+	}
+	writeJSON(w, http.StatusOK, list)
+}
+
+type trackViewBody struct {
+	ViewerKey string `json:"viewer_key"`
+}
+
+func (h CommunityHandler) TrackView(w http.ResponseWriter, r *http.Request) {
+	id, err := h.Svc.ChallengeIDBySlug(r.Context(), r.PathValue("idOrSlug"))
+	if err != nil {
+		mapCommunityErr(w, err)
+		return
+	}
+	var body trackViewBody
+	_ = json.NewDecoder(r.Body).Decode(&body)
+	var viewerID *uuid.UUID
+	if u, ok := middleware.UserFromContext(r.Context()); ok {
+		tmp := u.ID
+		viewerID = &tmp
+	}
+	if err := h.Svc.TrackChallengeView(r.Context(), id, viewerID, body.ViewerKey); err != nil {
+		mapCommunityErr(w, err)
+		return
+	}
+	writeJSON(w, http.StatusOK, map[string]string{"status": "ok"})
+}
+
+type trackShareBody struct {
+	Channel string `json:"channel"`
+}
+
+func (h CommunityHandler) TrackShare(w http.ResponseWriter, r *http.Request) {
+	id, err := h.Svc.ChallengeIDBySlug(r.Context(), r.PathValue("idOrSlug"))
+	if err != nil {
+		mapCommunityErr(w, err)
+		return
+	}
+	var body trackShareBody
+	_ = json.NewDecoder(r.Body).Decode(&body)
+	var viewerID *uuid.UUID
+	if u, ok := middleware.UserFromContext(r.Context()); ok {
+		tmp := u.ID
+		viewerID = &tmp
+	}
+	if err := h.Svc.TrackShare(r.Context(), id, viewerID, body.Channel); err != nil {
+		mapCommunityErr(w, err)
+		return
+	}
+	writeJSON(w, http.StatusOK, map[string]string{"status": "ok"})
 }
 
 func mapCommunityErr(w http.ResponseWriter, err error) {

@@ -94,12 +94,33 @@
 
 ---
 
-## Pós-MVP
+## S7 — Community
+
+**Entrega:** followers, perfis públicos enriquecidos, influenciadores.
+
+## S8 — Growth & gamificação
+
+**Entrega:** referral, views/shares, achievements, creator stats.
+
+## S9 — Multi-arena UI
+
+**Entrega:** seed 2ª arena, API arenas CRUD/publish, `/arenas`, filtros marketplace/reservas.
+
+## S10 — Media & live hub
+
+**Entrega**
+- Extensão `media_assets` (purpose/status) + `live_streams`
+- Upload local autenticado (jpg/png/webp ≤5MB) + `GET /media/{id}`
+- Capa de desafio (`POST .../cover`) + UI create/detail/cards
+- Hub `/media` com streams demo
+
+**DoD:** upload → cover_url nas listagens; `/api/v1/live` lista seeds.
+
+## Pós-MVP restante
 
 | Sprint block | Fase overview | Foco |
 |--------------|---------------|------|
-| S7–S8 | Fase 4 | Followers, referral links, gamificação |
-| S9+ | Fase 5 | Flutter, multi-arena UI, media live |
+| S11+ | Fase 5 | Flutter, novas modalidades, patrocínios, analytics avançado |
 
 ---
 

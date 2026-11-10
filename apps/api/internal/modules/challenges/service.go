@@ -24,11 +24,17 @@ var (
 )
 
 type Service struct {
-	db *pgxpool.Pool
+	db        *pgxpool.Pool
+	publicURL string
 }
 
 func NewService(db *pgxpool.Pool) *Service {
 	return &Service{db: db}
+}
+
+func (s *Service) WithPublicURL(url string) *Service {
+	s.publicURL = strings.TrimRight(url, "/")
+	return s
 }
 
 type Challenge struct {
@@ -51,6 +57,8 @@ type Challenge struct {
 	ConfirmedCount  int        `json:"confirmed_count"`
 	StartsAt        time.Time  `json:"starts_at"`
 	EndsAt          *time.Time `json:"ends_at,omitempty"`
+	CoverAssetID    *uuid.UUID `json:"cover_asset_id,omitempty"`
+	CoverURL        string     `json:"cover_url,omitempty"`
 	IsDemo          bool       `json:"is_demo"`
 	Derived         Derived    `json:"derived"`
 	CreatedAt       time.Time  `json:"created_at"`
@@ -77,6 +85,7 @@ type CreateInput struct {
 
 type ListFilter struct {
 	ModalitySlug string
+	ArenaSlug    string
 	Status       string
 	OnlyPublic   bool
 	CreatedBy    *uuid.UUID
@@ -235,6 +244,41 @@ func (s *Service) Update(ctx context.Context, actor IdentityActor, idOrSlug stri
 	return s.Get(ctx, ch.ID.String(), actor)
 }
 
+func (s *Service) SetCover(ctx context.Context, actor IdentityActor, idOrSlug string, assetID uuid.UUID) (Challenge, error) {
+	ch, err := s.Get(ctx, idOrSlug, actor)
+	if err != nil {
+		return Challenge{}, err
+	}
+	if !canEdit(actor, ch) {
+		return Challenge{}, ErrForbidden
+	}
+	var owner uuid.UUID
+	var status string
+	err = s.db.QueryRow(ctx, `
+		SELECT COALESCE(owner_user_id, '00000000-0000-0000-0000-000000000000'::uuid), status
+		FROM media_assets WHERE id = $1
+	`, assetID).Scan(&owner, &status)
+	if err != nil {
+		if errors.Is(err, pgx.ErrNoRows) {
+			return Challenge{}, fmt.Errorf("%w: asset", ErrInvalidInput)
+		}
+		return Challenge{}, err
+	}
+	if status != "ready" {
+		return Challenge{}, fmt.Errorf("%w: asset not ready", ErrInvalidInput)
+	}
+	if owner != actor.ID && !auth.HasAnyRole(actor.Roles, auth.RoleAdmin, auth.RoleOrganizer) {
+		return Challenge{}, ErrForbidden
+	}
+	_, err = s.db.Exec(ctx, `
+		UPDATE challenges SET cover_asset_id = $2, updated_at = now() WHERE id = $1
+	`, ch.ID, assetID)
+	if err != nil {
+		return Challenge{}, err
+	}
+	return s.Get(ctx, ch.ID.String(), actor)
+}
+
 func (s *Service) Transition(ctx context.Context, actor IdentityActor, idOrSlug, to string) (Challenge, error) {
 	ch, err := s.Get(ctx, idOrSlug, actor)
 	if err != nil {
@@ -293,7 +337,7 @@ func (s *Service) Get(ctx context.Context, idOrSlug string, viewer IdentityActor
 	ch, err := s.scanOne(ctx, `
 		SELECT c.id, c.slug, c.title, c.description, c.modality_id, m.slug, m.name,
 		       c.arena_id, a.slug, a.name, c.created_by, p.username, c.competition_type,
-		       c.status, c.regulation, c.capacity, c.starts_at, c.ends_at, c.is_demo,
+		       c.status, c.regulation, c.capacity, c.starts_at, c.ends_at, c.cover_asset_id, c.is_demo,
 		       c.created_at, c.updated_at,
 		       COALESCE((
 		         SELECT COUNT(*) FROM challenge_participants cp
@@ -327,6 +371,10 @@ func (s *Service) List(ctx context.Context, viewer IdentityActor, f ListFilter) 
 		args = append(args, f.ModalitySlug)
 		where = append(where, fmt.Sprintf("m.slug = $%d", len(args)))
 	}
+	if f.ArenaSlug != "" {
+		args = append(args, f.ArenaSlug)
+		where = append(where, fmt.Sprintf("a.slug = $%d", len(args)))
+	}
 	if f.Status != "" {
 		args = append(args, f.Status)
 		where = append(where, fmt.Sprintf("c.status = $%d", len(args)))
@@ -339,7 +387,7 @@ func (s *Service) List(ctx context.Context, viewer IdentityActor, f ListFilter) 
 	q := fmt.Sprintf(`
 		SELECT c.id, c.slug, c.title, c.description, c.modality_id, m.slug, m.name,
 		       c.arena_id, a.slug, a.name, c.created_by, p.username, c.competition_type,
-		       c.status, c.regulation, c.capacity, c.starts_at, c.ends_at, c.is_demo,
+		       c.status, c.regulation, c.capacity, c.starts_at, c.ends_at, c.cover_asset_id, c.is_demo,
 		       c.created_at, c.updated_at,
 		       COALESCE((
 		         SELECT COUNT(*) FROM challenge_participants cp
@@ -361,7 +409,7 @@ func (s *Service) List(ctx context.Context, viewer IdentityActor, f ListFilter) 
 	defer rows.Close()
 	var out []Challenge
 	for rows.Next() {
-		ch, err := scanChallenge(rows)
+		ch, err := s.scanChallenge(rows)
 		if err != nil {
 			return nil, err
 		}
@@ -427,7 +475,7 @@ type scannable interface {
 
 func (s *Service) scanOne(ctx context.Context, q string, arg any) (Challenge, error) {
 	row := s.db.QueryRow(ctx, q, arg)
-	ch, err := scanChallenge(row)
+	ch, err := s.scanChallenge(row)
 	if err != nil {
 		if errors.Is(err, pgx.ErrNoRows) {
 			return Challenge{}, ErrNotFound
@@ -438,15 +486,21 @@ func (s *Service) scanOne(ctx context.Context, q string, arg any) (Challenge, er
 	return ch, nil
 }
 
-func scanChallenge(row scannable) (Challenge, error) {
+func (s *Service) scanChallenge(row scannable) (Challenge, error) {
 	var ch Challenge
 	err := row.Scan(
 		&ch.ID, &ch.Slug, &ch.Title, &ch.Description, &ch.ModalityID, &ch.ModalitySlug, &ch.ModalityName,
 		&ch.ArenaID, &ch.ArenaSlug, &ch.ArenaName, &ch.CreatedBy, &ch.CreatorUsername, &ch.CompetitionType,
-		&ch.Status, &ch.Regulation, &ch.Capacity, &ch.StartsAt, &ch.EndsAt, &ch.IsDemo,
+		&ch.Status, &ch.Regulation, &ch.Capacity, &ch.StartsAt, &ch.EndsAt, &ch.CoverAssetID, &ch.IsDemo,
 		&ch.CreatedAt, &ch.UpdatedAt, &ch.ConfirmedCount,
 	)
-	return ch, err
+	if err != nil {
+		return Challenge{}, err
+	}
+	if ch.CoverAssetID != nil && s.publicURL != "" {
+		ch.CoverURL = s.publicURL + "/media/" + ch.CoverAssetID.String()
+	}
+	return ch, nil
 }
 
 var nonSlug = regexp.MustCompile(`[^a-z0-9]+`)

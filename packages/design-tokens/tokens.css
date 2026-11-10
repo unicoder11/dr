@@ -1,13 +1,18 @@
 :root {
-  --color-racing-black: #080d11;
-  --color-electric-lime: #b7ff00;
+  /* Brand Bible v1.0 */
+  --color-racing-black: #17191d;
+  --color-electric-lime: #c7f000;
+  --color-warm-gold: #d69a48;
+  --color-off-white: #f5f5f2;
   --color-white: #ffffff;
-  --color-graphite: #2a2e34;
+  --color-graphite: #454b52;
   --color-silver: #c9cdd3;
-  --color-gold: #d4a235;
+  --color-gold: #d69a48;
+  --color-sunset: #ff8a1f;
+  --color-amber: #f0c14a;
 
-  --font-display: "Bebas Neue", "Arial Narrow", Impact, sans-serif;
-  --font-body: "DM Sans", "Helvetica Neue", Helvetica, sans-serif;
+  --font-display: "Anton", "Arial Narrow", Impact, sans-serif;
+  --font-body: "Montserrat", "Helvetica Neue", Helvetica, sans-serif;
 
   --space-1: 0.25rem;
   --space-2: 0.5rem;

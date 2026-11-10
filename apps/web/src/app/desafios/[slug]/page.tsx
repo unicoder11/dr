@@ -19,6 +19,7 @@ export default function ChallengePublicPage() {
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
   const [inviteUser, setInviteUser] = useState("");
+  const [coverBusy, setCoverBusy] = useState(false);
 
   async function load() {
     const ch = await api.challenge(params.slug);
@@ -30,6 +31,16 @@ export default function ChallengePublicPage() {
   useEffect(() => {
     load().catch((e) => setError(e instanceof Error ? e.message : "erro"));
     api.me().then(setUser).catch(() => setUser(null));
+    const key =
+      typeof window !== "undefined"
+        ? localStorage.getItem("dr_viewer_key") ||
+          (() => {
+            const k = crypto.randomUUID();
+            localStorage.setItem("dr_viewer_key", k);
+            return k;
+          })()
+        : "";
+    api.trackView(params.slug, key).catch(() => undefined);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [params.slug]);
 
@@ -115,8 +126,31 @@ export default function ChallengePublicPage() {
     challenge.derived.open &&
     !myPart;
 
+  async function onCoverChange(file: File | null) {
+    if (!challenge || !file) return;
+    setCoverBusy(true);
+    setError(null);
+    try {
+      const asset = await api.uploadMedia(file, "cover", challenge.title);
+      const updated = await api.setChallengeCover(challenge.slug, asset.id);
+      setChallenge(updated);
+    } catch (e) {
+      setError(e instanceof Error ? e.message : "erro");
+    } finally {
+      setCoverBusy(false);
+    }
+  }
+
   return (
     <div className="mx-auto max-w-3xl px-6 py-28">
+      {challenge.cover_url ? (
+        // eslint-disable-next-line @next/next/no-img-element
+        <img
+          src={challenge.cover_url}
+          alt=""
+          className="mb-8 aspect-[21/9] w-full object-cover"
+        />
+      ) : null}
       <div className="flex flex-wrap items-center gap-3">
         <p className="text-xs uppercase tracking-wider text-silver">
           {challenge.modality_name}
@@ -171,6 +205,19 @@ export default function ChallengePublicPage() {
         </ul>
       </section>
 
+      {isOwner && (
+        <label className="mt-8 block text-sm text-silver">
+          {coverBusy ? "Enviando capa..." : "Atualizar capa"}
+          <input
+            type="file"
+            accept="image/jpeg,image/png,image/webp,image/gif"
+            disabled={coverBusy}
+            onChange={(e) => onCoverChange(e.target.files?.[0] || null)}
+            className="mt-1 block w-full text-sm text-silver file:mr-3 file:rounded-sm file:border-0 file:bg-lime file:px-3 file:py-1.5 file:font-semibold file:text-racing"
+          />
+        </label>
+      )}
+
       {isOwner && challenge.status === "published" && (
         <form onSubmit={onInvite} className="mt-8 flex flex-wrap gap-3">
           <input
@@ -213,6 +260,20 @@ export default function ChallengePublicPage() {
             Aprovar e publicar
           </Button>
         )}
+        <Button
+          variant="ghost"
+          onClick={async () => {
+            const url = window.location.href;
+            try {
+              await navigator.clipboard.writeText(url);
+              await api.trackShare(challenge.slug, "clipboard");
+            } catch {
+              await api.trackShare(challenge.slug, "link");
+            }
+          }}
+        >
+          Compartilhar
+        </Button>
         <Button href="/desafios" variant="ghost">
           Ver todos
         </Button>

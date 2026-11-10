@@ -11,6 +11,7 @@ export default function NovoDesafioPage() {
   const [arenas, setArenas] = useState<Arena[]>([]);
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
+  const [coverFile, setCoverFile] = useState<File | null>(null);
 
   useEffect(() => {
     api.me().catch(() => router.push("/entrar"));
@@ -30,7 +31,7 @@ export default function NovoDesafioPage() {
     const startsLocal = String(fd.get("starts_at") || "");
     const starts_at = new Date(startsLocal).toISOString();
     try {
-      const ch = await api.createChallenge({
+      let ch = await api.createChallenge({
         title: String(fd.get("title") || ""),
         description: String(fd.get("description") || ""),
         modality_id: String(fd.get("modality_id") || ""),
@@ -40,6 +41,10 @@ export default function NovoDesafioPage() {
         capacity: Number(fd.get("capacity") || 8),
         starts_at,
       });
+      if (coverFile) {
+        const asset = await api.uploadMedia(coverFile, "cover", ch.title);
+        ch = await api.setChallengeCover(ch.slug, asset.id);
+      }
       router.push(`/desafios/${ch.slug}`);
     } catch (err) {
       setError(err instanceof Error ? err.message : "erro");
@@ -114,6 +119,15 @@ export default function NovoDesafioPage() {
         </label>
         <Field label="Capacidade" name="capacity" type="number" defaultValue="8" required />
         <Field label="Data e horário" name="starts_at" type="datetime-local" defaultValue={defaultStart} required />
+        <label className="block text-sm text-silver">
+          Capa (jpg/png/webp, máx. 5MB)
+          <input
+            type="file"
+            accept="image/jpeg,image/png,image/webp,image/gif"
+            onChange={(e) => setCoverFile(e.target.files?.[0] || null)}
+            className="mt-1 block w-full text-sm text-silver file:mr-3 file:rounded-sm file:border-0 file:bg-lime file:px-3 file:py-1.5 file:font-semibold file:text-racing"
+          />
+        </label>
         <label className="block text-sm text-silver">
           Regulamento
           <textarea

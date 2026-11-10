@@ -52,6 +52,14 @@ export default function AppHubPage() {
           <h2 className="font-display text-2xl text-white">Indicação</h2>
           <p className="mt-1 text-sm text-silver">Link de referral</p>
         </Link>
+        <Link className="border border-white/10 p-5 hover:border-lime" href="/app/creator">
+          <h2 className="font-display text-2xl text-white">Creator stats</h2>
+          <p className="mt-1 text-sm text-silver">Views, shares, wins</p>
+        </Link>
+        <Link className="border border-white/10 p-5 hover:border-lime" href="/influenciadores">
+          <h2 className="font-display text-2xl text-white">Influenciadores</h2>
+          <p className="mt-1 text-sm text-silver">Leaderboard growth</p>
+        </Link>
         <Link className="border border-white/10 p-5 hover:border-lime" href="/desafios">
           <h2 className="font-display text-2xl text-white">Desafios</h2>
           <p className="mt-1 text-sm text-silver">Explorar marketplace</p>

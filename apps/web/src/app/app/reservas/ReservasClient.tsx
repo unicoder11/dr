@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from "react";
 import { useSearchParams } from "next/navigation";
-import { api, type Booking } from "@/lib/api";
+import { api, type Arena, type Booking } from "@/lib/api";
 import { Button } from "@/components/ui/Button";
 import { BookingWidget } from "@/components/booking/BookingWidget";
 
@@ -17,6 +17,8 @@ export function ReservasClient() {
   const params = useSearchParams();
   const status = params.get("status");
   const [items, setItems] = useState<Booking[]>([]);
+  const [arenas, setArenas] = useState<Arena[]>([]);
+  const [arenaSlug, setArenaSlug] = useState("super-mountain-kart");
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState<string | null>(null);
 
@@ -27,6 +29,13 @@ export function ReservasClient() {
 
   useEffect(() => {
     load().catch((e) => setError(e instanceof Error ? e.message : "erro"));
+    api.arenas().then((list) => {
+      setArenas(list);
+      if (list[0] && !list.find((a) => a.slug === arenaSlug)) {
+        setArenaSlug(list[0].slug);
+      }
+    });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   return (
@@ -44,8 +53,25 @@ export function ReservasClient() {
       )}
       {error && <p className="mt-4 text-sm text-red-400">{error}</p>}
 
+      <div className="mt-8 flex flex-wrap gap-2">
+        {arenas.map((a) => (
+          <button
+            key={a.id}
+            type="button"
+            onClick={() => setArenaSlug(a.slug)}
+            className={`rounded-sm px-3 py-1.5 text-sm ${
+              arenaSlug === a.slug
+                ? "bg-lime text-racing"
+                : "border border-white/15 text-silver hover:border-lime"
+            }`}
+          >
+            {a.name}
+          </button>
+        ))}
+      </div>
+
       <div className="mt-10 grid gap-10 lg:grid-cols-2">
-        <BookingWidget />
+        <BookingWidget arenaSlug={arenaSlug} />
         <div>
           <h2 className="font-display text-3xl text-white">Minhas reservas</h2>
           <ul className="mt-6 space-y-3">

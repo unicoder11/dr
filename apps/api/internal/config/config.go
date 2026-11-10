@@ -22,6 +22,7 @@ type Config struct {
 	FlagP2PPrizes     bool
 	MPAccessToken     string
 	MPWebhookSecret   string
+	MediaDir          string
 }
 
 func Load() (Config, error) {
@@ -40,6 +41,7 @@ func Load() (Config, error) {
 		FlagP2PPrizes:   getEnvBool("FLAG_PAYMENTS_P2P_PRIZES", false),
 		MPAccessToken:   os.Getenv("MERCADOPAGO_ACCESS_TOKEN"),
 		MPWebhookSecret: os.Getenv("MERCADOPAGO_WEBHOOK_SECRET"),
+		MediaDir:        getEnv("MEDIA_DIR", "data/uploads"),
 	}
 
 	if cfg.SessionSecret == "" {

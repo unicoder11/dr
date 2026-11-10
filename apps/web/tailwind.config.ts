@@ -9,15 +9,16 @@ export default {
   theme: {
     extend: {
       colors: {
-        racing: "#080D11",
-        lime: "#B7FF00",
-        graphite: "#2A2E34",
+        racing: "#17191D",
+        lime: "#C7F000",
+        graphite: "#454B52",
         silver: "#C9CDD3",
-        gold: "#D4A235",
+        gold: "#D69A48",
+        cream: "#F5F5F2",
       },
       fontFamily: {
-        display: ["var(--font-display-face)", "Arial Narrow", "Impact", "sans-serif"],
-        body: ["var(--font-body-face)", "Helvetica Neue", "Helvetica", "sans-serif"],
+        display: ["var(--font-display-face)", "Anton", "Impact", "sans-serif"],
+        body: ["var(--font-body-face)", "Montserrat", "Helvetica Neue", "sans-serif"],
       },
     },
   },

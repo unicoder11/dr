@@ -58,6 +58,7 @@ func (h ChallengesHandler) List(w http.ResponseWriter, r *http.Request) {
 	q := r.URL.Query()
 	f := challenges.ListFilter{
 		ModalitySlug: q.Get("modality"),
+		ArenaSlug:    q.Get("arena"),
 		Status:       q.Get("status"),
 		OnlyPublic:   q.Get("mine") != "1",
 	}
@@ -150,6 +151,29 @@ func (h ChallengesHandler) Update(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, http.StatusOK, ch)
 }
 
+type coverBody struct {
+	AssetID uuid.UUID `json:"asset_id"`
+}
+
+func (h ChallengesHandler) SetCover(w http.ResponseWriter, r *http.Request) {
+	u, ok := middleware.UserFromContext(r.Context())
+	if !ok {
+		writeJSON(w, http.StatusUnauthorized, map[string]string{"error": "unauthorized"})
+		return
+	}
+	var body coverBody
+	if err := json.NewDecoder(r.Body).Decode(&body); err != nil || body.AssetID == uuid.Nil {
+		writeJSON(w, http.StatusBadRequest, map[string]string{"error": "invalid_json"})
+		return
+	}
+	ch, err := h.Svc.SetCover(r.Context(), challenges.Actor(u.ID, u.Roles), r.PathValue("idOrSlug"), body.AssetID)
+	if err != nil {
+		mapChallengeErr(w, err)
+		return
+	}
+	writeJSON(w, http.StatusOK, ch)
+}
+
 type transitionBody struct {
 	Status string `json:"status"`
 }
@@ -172,6 +196,9 @@ func (h ChallengesHandler) Transition(w http.ResponseWriter, r *http.Request) {
 	}
 	if h.Community != nil && body.Status == challenges.StatusPublished {
 		_ = h.Community.GrantAchievement(r.Context(), u.ID, "challenger")
+		if stats, err := h.Community.CreatorStats(r.Context(), u.Username); err == nil {
+			_ = h.Community.EvaluateGrowthAchievements(r.Context(), u.ID, stats)
+		}
 	}
 	writeJSON(w, http.StatusOK, ch)
 }

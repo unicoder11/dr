@@ -8,10 +8,12 @@ import (
 	"github.com/desafiosreais/dr/apps/api/internal/http/middleware"
 	"github.com/desafiosreais/dr/apps/api/internal/infra/mercadopago"
 	"github.com/desafiosreais/dr/apps/api/internal/modules/admin"
+	"github.com/desafiosreais/dr/apps/api/internal/modules/arenas"
 	"github.com/desafiosreais/dr/apps/api/internal/modules/bookings"
 	"github.com/desafiosreais/dr/apps/api/internal/modules/challenges"
 	"github.com/desafiosreais/dr/apps/api/internal/modules/community"
 	"github.com/desafiosreais/dr/apps/api/internal/modules/identity"
+	"github.com/desafiosreais/dr/apps/api/internal/modules/media"
 	"github.com/desafiosreais/dr/apps/api/internal/modules/notifications"
 	"github.com/desafiosreais/dr/apps/api/internal/modules/ops"
 	"github.com/jackc/pgx/v5/pgxpool"
@@ -22,10 +24,13 @@ func NewRouter(cfg config.Config, db *pgxpool.Pool) http.Handler {
 
 	identitySvc := identity.NewService(db)
 	adminSvc := admin.NewService(db)
-	challengeSvc := challenges.NewService(db)
+	challengeSvc := challenges.NewService(db).WithPublicURL(cfg.PublicURL)
 	notifSvc := notifications.NewService(db)
 	opsSvc := ops.NewService(db)
 	communitySvc := community.NewService(db)
+	arenaSvc := arenas.NewService(db)
+	mediaSvc := media.NewService(db, cfg.MediaDir, cfg.PublicURL)
+	_ = mediaSvc.EnsureDir()
 	mpClient := mercadopago.New(cfg.MPAccessToken)
 	bookingSvc := bookings.NewService(db, mpClient, cfg.PublicURL, cfg.SiteURL, cfg.AppEnv, !cfg.FlagP2PPrizes)
 
@@ -36,8 +41,10 @@ func NewRouter(cfg config.Config, db *pgxpool.Pool) http.Handler {
 	chH := handlers.ChallengesHandler{Svc: challengeSvc, Community: communitySvc}
 	partH := handlers.ParticipantsHandler{Challenges: challengeSvc, Notifs: notifSvc, Community: communitySvc}
 	bookH := handlers.BookingsHandler{Svc: bookingSvc, SiteURL: cfg.SiteURL}
-	opsH := handlers.OpsHandler{Svc: opsSvc}
+	opsH := handlers.OpsHandler{Svc: opsSvc, Community: communitySvc}
 	comH := handlers.CommunityHandler{Svc: communitySvc, SiteURL: cfg.SiteURL}
+	arH := handlers.ArenasHandler{Svc: arenaSvc}
+	mediaH := handlers.MediaHandler{Svc: mediaSvc}
 
 	mux.HandleFunc("GET /healthz", health.Healthz)
 	mux.HandleFunc("GET /readyz", health.Readyz)
@@ -55,14 +62,26 @@ func NewRouter(cfg config.Config, db *pgxpool.Pool) http.Handler {
 	mux.HandleFunc("GET /api/v1/users/{username}/following", comH.Following)
 	mux.Handle("GET /api/v1/me/referral", middleware.RequireAuth(http.HandlerFunc(comH.MyReferral)))
 	mux.Handle("GET /api/v1/me/achievements", middleware.RequireAuth(http.HandlerFunc(comH.MyAchievements)))
+	mux.HandleFunc("GET /api/v1/users/{username}/stats", comH.CreatorStats)
+	mux.HandleFunc("GET /api/v1/influencers", comH.Influencers)
+	mux.HandleFunc("POST /api/v1/challenges/{idOrSlug}/views", comH.TrackView)
+	mux.HandleFunc("POST /api/v1/challenges/{idOrSlug}/shares", comH.TrackShare)
 
 	mux.HandleFunc("GET /api/v1/modalities", chH.ListModalities)
-	mux.HandleFunc("GET /api/v1/arenas", chH.ListArenas)
+	mux.HandleFunc("GET /api/v1/arenas", arH.List)
+	mux.HandleFunc("GET /api/v1/arenas/{slug}", arH.Get)
+	mux.Handle("POST /api/v1/admin/arenas", middleware.RequireAuth(middleware.RequireAdmin(http.HandlerFunc(arH.Create))))
+	mux.Handle("PATCH /api/v1/admin/arenas/{slug}/publish", middleware.RequireAuth(middleware.RequireAdmin(http.HandlerFunc(arH.SetPublished))))
 	mux.HandleFunc("GET /api/v1/challenges", chH.List)
 	mux.HandleFunc("GET /api/v1/challenges/{idOrSlug}", chH.Get)
 	mux.Handle("POST /api/v1/challenges", middleware.RequireAuth(http.HandlerFunc(chH.Create)))
 	mux.Handle("PATCH /api/v1/challenges/{idOrSlug}", middleware.RequireAuth(http.HandlerFunc(chH.Update)))
 	mux.Handle("POST /api/v1/challenges/{idOrSlug}/transition", middleware.RequireAuth(http.HandlerFunc(chH.Transition)))
+	mux.Handle("POST /api/v1/challenges/{idOrSlug}/cover", middleware.RequireAuth(http.HandlerFunc(chH.SetCover)))
+	mux.Handle("POST /api/v1/media/upload", middleware.RequireAuth(http.HandlerFunc(mediaH.Upload)))
+	mux.HandleFunc("GET /api/v1/media/{id}", mediaH.GetMeta)
+	mux.HandleFunc("GET /media/{id}", mediaH.Serve)
+	mux.HandleFunc("GET /api/v1/live", mediaH.ListLive)
 	mux.HandleFunc("GET /api/v1/challenges/{idOrSlug}/participants", partH.List)
 	mux.Handle("POST /api/v1/challenges/{idOrSlug}/join", middleware.RequireAuth(http.HandlerFunc(partH.Join)))
 	mux.Handle("POST /api/v1/challenges/{idOrSlug}/invites", middleware.RequireAuth(http.HandlerFunc(partH.Invite)))

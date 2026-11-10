@@ -2,6 +2,10 @@
 
 import { useEffect, useState } from "react";
 import { api, type Modality, type RankingEntry } from "@/lib/api";
+import { GlassPanel } from "@/components/ui/Glass";
+import { GlassShell } from "@/components/layout/GlassShell";
+import { PageHero } from "@/components/brand/PageHero";
+import { brand } from "@/lib/brand";
 
 export default function RankingsPage() {
   const [modalities, setModalities] = useState<Modality[]>([]);
@@ -21,62 +25,62 @@ export default function RankingsPage() {
   }, [modality]);
 
   return (
-    <div className="mx-auto max-w-4xl px-6 py-28">
-      <h1 className="font-display text-5xl text-white">Rankings</h1>
-      <p className="mt-2 text-silver">Temporada atual · pontos por modalidade.</p>
-
-      <div className="mt-8 flex flex-wrap gap-2">
-        <Chip active={modality === "geral"} onClick={() => setModality("geral")}>
-          Geral
-        </Chip>
-        {modalities.map((m) => (
-          <Chip
-            key={m.id}
-            active={modality === m.slug}
-            onClick={() => setModality(m.slug)}
-          >
-            {m.name}
+    <GlassShell bg={brand.images.winners}>
+      <PageHero
+        image={brand.images.winners}
+        eyebrow="STANDINGS"
+        title="Rankings"
+        subtitle="Temporada atual · pontos por modalidade."
+        priority
+      />
+      <GlassPanel className="mt-4 overflow-hidden p-5 md:p-7">
+        <div className="flex flex-wrap gap-2">
+          <Chip active={modality === "geral"} onClick={() => setModality("geral")}>
+            Geral
           </Chip>
-        ))}
-      </div>
-
-      {error && <p className="mt-6 text-red-400">{error}</p>}
-
-      <div className="mt-8 overflow-x-auto border border-white/10">
-        <table className="min-w-full text-left text-sm">
-          <thead className="bg-graphite text-silver">
-            <tr>
-              <th className="px-4 py-3">#</th>
-              <th className="px-4 py-3">Atleta</th>
-              <th className="px-4 py-3">Pontos</th>
-              <th className="px-4 py-3">Vitórias</th>
-              <th className="px-4 py-3">Participações</th>
-            </tr>
-          </thead>
-          <tbody>
-            {items.length === 0 && (
+          {modalities.map((m) => (
+            <Chip key={m.id} active={modality === m.slug} onClick={() => setModality(m.slug)}>
+              {m.name}
+            </Chip>
+          ))}
+        </div>
+        {error && <p className="mt-6 text-red-400">{error}</p>}
+        <div className="mt-8 overflow-x-auto rounded-2xl border border-white/10">
+          <table className="min-w-full text-left text-sm">
+            <thead className="bg-black/40 text-silver">
               <tr>
-                <td className="px-4 py-6 text-silver" colSpan={5}>
-                  Sem ranking ainda. Valide resultados no painel ops.
-                </td>
+                <th className="px-4 py-3">#</th>
+                <th className="px-4 py-3">Atleta</th>
+                <th className="px-4 py-3">Pontos</th>
+                <th className="px-4 py-3">Vitórias</th>
+                <th className="px-4 py-3">Participações</th>
               </tr>
-            )}
-            {items.map((row) => (
-              <tr key={row.user_id} className="border-t border-white/10">
-                <td className="px-4 py-3 text-lime">{row.rank_position || "—"}</td>
-                <td className="px-4 py-3 text-white">
-                  {row.display_name}
-                  <div className="text-xs text-silver">@{row.username}</div>
-                </td>
-                <td className="px-4 py-3 text-white">{row.points}</td>
-                <td className="px-4 py-3 text-silver">{row.wins}</td>
-                <td className="px-4 py-3 text-silver">{row.participations}</td>
-              </tr>
-            ))}
-          </tbody>
-        </table>
-      </div>
-    </div>
+            </thead>
+            <tbody>
+              {items.length === 0 && (
+                <tr>
+                  <td className="px-4 py-6 text-silver" colSpan={5}>
+                    Sem ranking ainda. Valide resultados no painel ops.
+                  </td>
+                </tr>
+              )}
+              {items.map((row) => (
+                <tr key={row.user_id} className="border-t border-white/10">
+                  <td className="px-4 py-3 font-display text-lime">{row.rank_position || "—"}</td>
+                  <td className="px-4 py-3 text-white">
+                    {row.display_name}
+                    <div className="text-xs text-silver">@{row.username}</div>
+                  </td>
+                  <td className="px-4 py-3 text-white">{row.points}</td>
+                  <td className="px-4 py-3 text-silver">{row.wins}</td>
+                  <td className="px-4 py-3 text-silver">{row.participations}</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      </GlassPanel>
+    </GlassShell>
   );
 }
 
@@ -93,8 +97,10 @@ function Chip({
     <button
       type="button"
       onClick={onClick}
-      className={`rounded-sm px-3 py-1.5 text-sm ${
-        active ? "bg-lime text-racing" : "border border-white/15 text-silver hover:border-lime"
+      className={`rounded-full px-3 py-1.5 text-sm transition ${
+        active
+          ? "bg-lime font-semibold text-racing"
+          : "border border-white/15 bg-white/5 text-silver hover:border-lime"
       }`}
     >
       {children}
