@@ -65,6 +65,40 @@ export type ChallengeInput = {
   ends_at?: string | null;
 };
 
+export type Participant = {
+  id: string;
+  challenge_id: string;
+  user_id: string;
+  username: string;
+  display_name: string;
+  status: string;
+  challenge_slug?: string;
+  challenge_title?: string;
+  challenge_starts_at?: string;
+};
+
+export type CalendarItem = {
+  challenge_id: string;
+  slug: string;
+  title: string;
+  challenge_status: string;
+  participant_status?: string;
+  role: string;
+  modality_name: string;
+  arena_name: string;
+  starts_at: string;
+  capacity: number;
+  confirmed_count: number;
+};
+
+export type Notification = {
+  id: string;
+  type: string;
+  payload: Record<string, unknown>;
+  read_at?: string | null;
+  created_at: string;
+};
+
 async function request<T>(path: string, init?: RequestInit): Promise<T> {
   const res = await fetch(`${API_URL}${path}`, {
     ...init,
@@ -119,5 +153,28 @@ export const api = {
     request<Challenge>(`/api/v1/challenges/${idOrSlug}/transition`, {
       method: "POST",
       body: JSON.stringify({ status }),
+    }),
+  participants: (idOrSlug: string) =>
+    request<Participant[]>(`/api/v1/challenges/${idOrSlug}/participants`),
+  joinChallenge: (idOrSlug: string) =>
+    request<Participant>(`/api/v1/challenges/${idOrSlug}/join`, { method: "POST" }),
+  invite: (idOrSlug: string, username: string) =>
+    request<Participant>(`/api/v1/challenges/${idOrSlug}/invites`, {
+      method: "POST",
+      body: JSON.stringify({ username }),
+    }),
+  acceptInvite: (id: string) =>
+    request<Participant>(`/api/v1/participants/${id}/accept`, { method: "POST" }),
+  declineInvite: (id: string) =>
+    request<Participant>(`/api/v1/participants/${id}/decline`, { method: "POST" }),
+  myInvites: () => request<Participant[]>("/api/v1/me/invites"),
+  calendar: () => request<CalendarItem[]>("/api/v1/me/calendar"),
+  notifications: (unread?: boolean) =>
+    request<Notification[]>(
+      `/api/v1/me/notifications${unread ? "?unread=1" : ""}`,
+    ),
+  markNotificationRead: (id: string) =>
+    request<{ status: string }>(`/api/v1/me/notifications/${id}/read`, {
+      method: "POST",
     }),
 };

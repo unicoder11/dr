@@ -48,6 +48,18 @@ export default function AppHubPage() {
           <h2 className="font-display text-2xl text-white">Criar desafio</h2>
           <p className="mt-1 text-sm text-silver">Novo confronto SMK</p>
         </Link>
+        <Link className="border border-white/10 p-5 hover:border-lime" href="/app/calendario">
+          <h2 className="font-display text-2xl text-white">Calendário</h2>
+          <p className="mt-1 text-sm text-silver">Agenda pessoal</p>
+        </Link>
+        <Link className="border border-white/10 p-5 hover:border-lime" href="/app/convites">
+          <h2 className="font-display text-2xl text-white">Convites</h2>
+          <p className="mt-1 text-sm text-silver">Pendentes</p>
+        </Link>
+        <Link className="border border-white/10 p-5 hover:border-lime" href="/app/notificacoes">
+          <h2 className="font-display text-2xl text-white">Notificações</h2>
+          <p className="mt-1 text-sm text-silver">Alertas in-app</p>
+        </Link>
         <Link className="border border-white/10 p-5 hover:border-lime" href="/arena">
           <h2 className="font-display text-2xl text-white">Reservas</h2>
           <p className="mt-1 text-sm text-silver">Super Mountain Kart</p>

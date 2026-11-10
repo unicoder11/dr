@@ -1,29 +1,34 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { FormEvent, useEffect, useState } from "react";
 import { useParams } from "next/navigation";
-import { api, type ApiUser, type Challenge } from "@/lib/api";
+import {
+  api,
+  type ApiUser,
+  type Challenge,
+  type Participant,
+} from "@/lib/api";
 import { StatusBadge } from "@/components/challenge/StatusBadge";
 import { Button } from "@/components/ui/Button";
 
 export default function ChallengePublicPage() {
   const params = useParams<{ slug: string }>();
   const [challenge, setChallenge] = useState<Challenge | null>(null);
+  const [participants, setParticipants] = useState<Participant[]>([]);
   const [user, setUser] = useState<ApiUser | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
+  const [inviteUser, setInviteUser] = useState("");
 
   async function load() {
-    try {
-      const ch = await api.challenge(params.slug);
-      setChallenge(ch);
-    } catch (e) {
-      setError(e instanceof Error ? e.message : "erro");
-    }
+    const ch = await api.challenge(params.slug);
+    setChallenge(ch);
+    const parts = await api.participants(params.slug);
+    setParticipants(parts);
   }
 
   useEffect(() => {
-    load();
+    load().catch((e) => setError(e instanceof Error ? e.message : "erro"));
     api.me().then(setUser).catch(() => setUser(null));
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [params.slug]);
@@ -31,11 +36,46 @@ export default function ChallengePublicPage() {
   async function transition(status: string) {
     if (!challenge) return;
     setBusy(true);
+    setError(null);
     try {
       const updated = await api.transitionChallenge(challenge.slug, status);
       setChallenge(updated);
     } catch (e) {
       setError(e instanceof Error ? e.message : "erro");
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  async function join() {
+    if (!challenge) return;
+    if (!user) {
+      window.location.href = "/entrar";
+      return;
+    }
+    setBusy(true);
+    setError(null);
+    try {
+      await api.joinChallenge(challenge.slug);
+      await load();
+    } catch (e) {
+      setError(e instanceof Error ? e.message : "erro");
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  async function onInvite(e: FormEvent) {
+    e.preventDefault();
+    if (!challenge || !inviteUser.trim()) return;
+    setBusy(true);
+    setError(null);
+    try {
+      await api.invite(challenge.slug, inviteUser.trim());
+      setInviteUser("");
+      await load();
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "erro");
     } finally {
       setBusy(false);
     }
@@ -61,6 +101,7 @@ export default function ChallengePublicPage() {
     timeStyle: "short",
   });
   const isOwner = user?.id === challenge.created_by;
+  const myPart = participants.find((p) => p.user_id === user?.id);
   const canPublish =
     isOwner &&
     challenge.status === "draft" &&
@@ -69,6 +110,10 @@ export default function ChallengePublicPage() {
   const canApprove =
     challenge.status === "pending_approval" &&
     user?.roles.some((r) => ["admin", "organizer"].includes(r));
+  const canJoin =
+    challenge.status === "published" &&
+    challenge.derived.open &&
+    !myPart;
 
   return (
     <div className="mx-auto max-w-3xl px-6 py-28">
@@ -109,9 +154,50 @@ export default function ChallengePublicPage() {
         </div>
       </dl>
 
+      <section className="mt-10 border-t border-white/10 pt-8">
+        <h2 className="font-display text-2xl text-white">Participantes</h2>
+        <ul className="mt-4 space-y-2">
+          {participants.length === 0 && (
+            <li className="text-sm text-silver">Ninguém inscrito ainda.</li>
+          )}
+          {participants.map((p) => (
+            <li key={p.id} className="flex justify-between text-sm text-silver">
+              <span>
+                {p.display_name} <span className="text-white">@{p.username}</span>
+              </span>
+              <span className="text-lime">{p.status}</span>
+            </li>
+          ))}
+        </ul>
+      </section>
+
+      {isOwner && challenge.status === "published" && (
+        <form onSubmit={onInvite} className="mt-8 flex flex-wrap gap-3">
+          <input
+            value={inviteUser}
+            onChange={(e) => setInviteUser(e.target.value)}
+            placeholder="username para convidar"
+            className="min-w-[200px] flex-1 rounded-sm border border-white/15 bg-graphite px-3 py-2 text-white outline-none focus:border-lime"
+          />
+          <Button type="submit" disabled={busy} variant="ghost">
+            Convidar
+          </Button>
+        </form>
+      )}
+
       {error && <p className="mt-6 text-sm text-red-400">{error}</p>}
+      {myPart && (
+        <p className="mt-6 text-sm text-lime">
+          Sua inscrição: {myPart.status}
+        </p>
+      )}
 
       <div className="mt-10 flex flex-wrap gap-3">
+        {canJoin && (
+          <Button disabled={busy} onClick={join}>
+            Participar
+          </Button>
+        )}
         {canSubmit && (
           <Button disabled={busy} onClick={() => transition("pending_approval")}>
             Enviar para aprovação
