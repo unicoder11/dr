@@ -8,21 +8,23 @@ import (
 )
 
 type Config struct {
-	Addr              string
-	PublicURL         string
-	SiteURL           string
-	AppEnv            string
-	DatabaseURL       string
-	RedisURL          string
-	SessionSecret     string
-	CORSOrigins       []string
-	AdminEmail        string
-	AdminPassword     string
-	AdminUsername     string
-	FlagP2PPrizes     bool
-	MPAccessToken     string
-	MPWebhookSecret   string
-	MediaDir          string
+	Addr            string
+	PublicURL       string
+	SiteURL         string
+	AppEnv          string
+	DatabaseURL     string
+	RedisURL        string
+	SessionSecret   string
+	CORSOrigins     []string
+	AdminEmail      string
+	AdminPassword   string
+	AdminUsername   string
+	FlagP2PPrizes   bool
+	MPAccessToken   string
+	MPWebhookSecret string
+	MediaDir        string
+	ResendAPIKey    string
+	EmailFrom       string
 }
 
 func Load() (Config, error) {
@@ -42,6 +44,8 @@ func Load() (Config, error) {
 		MPAccessToken:   os.Getenv("MERCADOPAGO_ACCESS_TOKEN"),
 		MPWebhookSecret: os.Getenv("MERCADOPAGO_WEBHOOK_SECRET"),
 		MediaDir:        getEnv("MEDIA_DIR", "data/uploads"),
+		ResendAPIKey:    os.Getenv("RESEND_API_KEY"),
+		EmailFrom:       getEnv("EMAIL_FROM", "Desafios Reais <noreply@desafiosreais.com>"),
 	}
 
 	if cfg.SessionSecret == "" {

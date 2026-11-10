@@ -1,13 +1,16 @@
 package handlers
 
 import (
+	"context"
 	"encoding/json"
 	"errors"
+	"log"
 	"net/http"
 	"time"
 
 	"github.com/desafiosreais/dr/apps/api/internal/auth"
 	"github.com/desafiosreais/dr/apps/api/internal/http/middleware"
+	"github.com/desafiosreais/dr/apps/api/internal/infra/resend"
 	"github.com/desafiosreais/dr/apps/api/internal/modules/community"
 	"github.com/desafiosreais/dr/apps/api/internal/modules/identity"
 )
@@ -15,6 +18,8 @@ import (
 type AuthHandler struct {
 	Identity  *identity.Service
 	Community *community.Service
+	Mailer    *resend.Client
+	SiteURL   string
 	Secure    bool
 }
 
@@ -61,7 +66,18 @@ func (h AuthHandler) Register(w http.ResponseWriter, r *http.Request) {
 			_ = h.Community.AttributeReferral(r.Context(), user.ID, req.ReferralCode)
 		}
 	}
+	h.sendWelcome(r.Context(), user)
 	writeJSON(w, http.StatusCreated, user)
+}
+
+func (h AuthHandler) sendWelcome(ctx context.Context, user identity.User) {
+	if h.Mailer == nil || !h.Mailer.Enabled() {
+		return
+	}
+	subject, htmlBody, textBody := resend.Welcome(user.DisplayName, user.Username, h.SiteURL)
+	if err := h.Mailer.Send(ctx, user.Email, subject, htmlBody, textBody); err != nil {
+		log.Printf("welcome email: %v", err)
+	}
 }
 
 func (h AuthHandler) Login(w http.ResponseWriter, r *http.Request) {
