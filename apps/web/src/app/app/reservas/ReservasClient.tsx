@@ -6,6 +6,15 @@ import { api, type Arena, type Booking } from "@/lib/api";
 import { Button } from "@/components/ui/Button";
 import { BookingWidget } from "@/components/booking/BookingWidget";
 
+const statusLabel: Record<string, string> = {
+  pending_payment: "Aguardando pagamento",
+  confirmed: "Confirmada",
+  cancelled: "Cancelada",
+  checked_in: "Check-in feito",
+  completed: "Concluída",
+  refunded: "Reembolsada",
+};
+
 function formatBRL(cents: number) {
   return (cents / 100).toLocaleString("pt-BR", {
     style: "currency",
@@ -94,17 +103,12 @@ export function ReservasClient() {
                       </p>
                       <p className="mt-1 text-sm text-silver">{when}</p>
                       <p className="mt-1 text-xs text-lime">
-                        {b.status} · {formatBRL(b.amount_cents)}
+                        {statusLabel[b.status] || b.status} · {formatBRL(b.amount_cents)}
                       </p>
                     </div>
                     <div className="flex flex-col gap-2">
-                      {b.status === "pending_payment" && b.checkout_url && (
-                        <Button
-                          className="!px-3 !py-2 text-xs"
-                          onClick={() => {
-                            window.location.href = b.checkout_url!;
-                          }}
-                        >
+                      {b.status === "pending_payment" && (
+                        <Button href={`/app/reservas/pagar/${b.id}`} className="!px-3 !py-2 text-xs">
                           Pagar
                         </Button>
                       )}

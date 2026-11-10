@@ -302,6 +302,14 @@ export const api = {
       method: "POST",
       body: JSON.stringify({ slot_id }),
     }),
+  payBooking: (
+    id: string,
+    body: { method: "pix" | "card"; holder?: string; number?: string; expiry?: string; cvv?: string },
+  ) =>
+    request<Booking>(`/api/v1/bookings/${id}/pay`, {
+      method: "POST",
+      body: JSON.stringify(body),
+    }),
   myBookings: () => request<Booking[]>("/api/v1/me/bookings"),
   cancelBooking: (id: string) =>
     request<Booking>(`/api/v1/bookings/${id}/cancel`, { method: "POST" }),

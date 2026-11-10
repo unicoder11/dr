@@ -26,8 +26,8 @@ var (
 )
 
 type Service struct {
-	db       *pgxpool.Pool
-	mp       *mercadopago.Client
+	db        *pgxpool.Pool
+	mp        *mercadopago.Client
 	publicURL string
 	siteURL   string
 	appEnv    string
@@ -51,19 +51,19 @@ type Actor struct {
 }
 
 type Slot struct {
-	ID              uuid.UUID `json:"id"`
-	ArenaID         uuid.UUID `json:"arena_id"`
-	ArenaName       string    `json:"arena_name"`
-	ModalityID      uuid.UUID `json:"modality_id"`
-	ModalitySlug    string    `json:"modality_slug"`
-	ModalityName    string    `json:"modality_name"`
-	StartsAt        time.Time `json:"starts_at"`
-	EndsAt          time.Time `json:"ends_at"`
-	Capacity        int       `json:"capacity"`
-	BookedCount     int       `json:"booked_count"`
-	PriceCents      int       `json:"price_cents"`
-	Status          string    `json:"status"`
-	Available       bool      `json:"available"`
+	ID           uuid.UUID `json:"id"`
+	ArenaID      uuid.UUID `json:"arena_id"`
+	ArenaName    string    `json:"arena_name"`
+	ModalityID   uuid.UUID `json:"modality_id"`
+	ModalitySlug string    `json:"modality_slug"`
+	ModalityName string    `json:"modality_name"`
+	StartsAt     time.Time `json:"starts_at"`
+	EndsAt       time.Time `json:"ends_at"`
+	Capacity     int       `json:"capacity"`
+	BookedCount  int       `json:"booked_count"`
+	PriceCents   int       `json:"price_cents"`
+	Status       string    `json:"status"`
+	Available    bool      `json:"available"`
 }
 
 type Booking struct {
@@ -182,8 +182,8 @@ func (s *Service) Create(ctx context.Context, actor Actor, slotID uuid.UUID) (Bo
 		return Booking{}, err
 	}
 
-	checkoutURL := fmt.Sprintf("%s/api/v1/bookings/%s/mock-checkout", s.publicURL, id.String())
-	prefID := "mock-" + id.String()
+	checkoutURL := fmt.Sprintf("%s/app/reservas/pagar/%s", s.siteURL, id.String())
+	prefID := "local-" + id.String()
 
 	if s.mp != nil && s.mp.Enabled() {
 		pref, err := s.mp.CreatePreference(ctx, mercadopago.PreferenceRequest{
@@ -206,10 +206,6 @@ func (s *Service) Create(ctx context.Context, actor Actor, slotID uuid.UUID) (Bo
 			return Booking{}, err
 		}
 		prefID = pref.ID
-		checkoutURL = pref.InitPoint
-		if checkoutURL == "" {
-			checkoutURL = pref.SandboxInitPoint
-		}
 	}
 
 	_, err = tx.Exec(ctx, `
@@ -281,6 +277,31 @@ func (s *Service) Cancel(ctx context.Context, actor Actor, id uuid.UUID) (Bookin
 		return Booking{}, err
 	}
 	return s.Get(ctx, actor, id)
+}
+
+func (s *Service) Pay(ctx context.Context, actor Actor, id uuid.UUID, method, last4 string) (Booking, error) {
+	if method != "pix" && method != "card" {
+		return Booking{}, ErrInvalidInput
+	}
+	b, err := s.Get(ctx, actor, id)
+	if err != nil {
+		return Booking{}, err
+	}
+	if b.Status == "confirmed" || b.Status == "checked_in" || b.Status == "completed" {
+		return b, nil
+	}
+	if b.Status != "pending_payment" {
+		return Booking{}, ErrNotCancelable
+	}
+	payload := map[string]string{"method": method}
+	if last4 != "" {
+		payload["last4"] = last4
+	}
+	raw, err := json.Marshal(payload)
+	if err != nil {
+		return Booking{}, err
+	}
+	return s.confirmPayment(ctx, id, method+"-"+id.String(), "approved", raw)
 }
 
 func (s *Service) ConfirmMockCheckout(ctx context.Context, bookingID uuid.UUID) (Booking, error) {

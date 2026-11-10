@@ -7,6 +7,7 @@ import (
 	"github.com/desafiosreais/dr/apps/api/internal/http/handlers"
 	"github.com/desafiosreais/dr/apps/api/internal/http/middleware"
 	"github.com/desafiosreais/dr/apps/api/internal/infra/mercadopago"
+	"github.com/desafiosreais/dr/apps/api/internal/infra/resend"
 	"github.com/desafiosreais/dr/apps/api/internal/modules/admin"
 	"github.com/desafiosreais/dr/apps/api/internal/modules/arenas"
 	"github.com/desafiosreais/dr/apps/api/internal/modules/bookings"
@@ -35,7 +36,13 @@ func NewRouter(cfg config.Config, db *pgxpool.Pool) http.Handler {
 	bookingSvc := bookings.NewService(db, mpClient, cfg.PublicURL, cfg.SiteURL, cfg.AppEnv, !cfg.FlagP2PPrizes)
 
 	health := handlers.HealthHandler{DB: db}
-	authH := handlers.AuthHandler{Identity: identitySvc, Community: communitySvc, Secure: cfg.AppEnv == "production"}
+	authH := handlers.AuthHandler{
+		Identity:  identitySvc,
+		Community: communitySvc,
+		Mailer:    resend.New(cfg.ResendAPIKey, cfg.EmailFrom),
+		SiteURL:   cfg.SiteURL,
+		Secure:    cfg.AppEnv == "production",
+	}
 	adminH := handlers.AdminHandler{Admin: adminSvc}
 	usersH := handlers.UsersHandler{DB: db}
 	chH := handlers.ChallengesHandler{Svc: challengeSvc, Community: communitySvc}
@@ -96,6 +103,7 @@ func NewRouter(cfg config.Config, db *pgxpool.Pool) http.Handler {
 	mux.Handle("POST /api/v1/bookings", middleware.RequireAuth(http.HandlerFunc(bookH.Create)))
 	mux.Handle("GET /api/v1/me/bookings", middleware.RequireAuth(http.HandlerFunc(bookH.ListMine)))
 	mux.Handle("POST /api/v1/bookings/{id}/cancel", middleware.RequireAuth(http.HandlerFunc(bookH.Cancel)))
+	mux.Handle("POST /api/v1/bookings/{id}/pay", middleware.RequireAuth(http.HandlerFunc(bookH.Pay)))
 	mux.HandleFunc("GET /api/v1/bookings/{id}/mock-checkout", bookH.MockCheckout)
 	mux.HandleFunc("POST /api/v1/webhooks/mercadopago", bookH.MercadoPagoWebhook)
 	mux.HandleFunc("GET /api/v1/webhooks/mercadopago", bookH.MercadoPagoWebhook)

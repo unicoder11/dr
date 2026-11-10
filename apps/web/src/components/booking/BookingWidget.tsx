@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
+import { useRouter } from "next/navigation";
 import { api, type Modality, type Slot } from "@/lib/api";
 import { Button } from "@/components/ui/Button";
 
@@ -17,6 +18,7 @@ export function BookingWidget({ arenaSlug = "super-mountain-kart" }: { arenaSlug
   const [slots, setSlots] = useState<Slot[]>([]);
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
+  const router = useRouter();
 
   useEffect(() => {
     api.modalities().then((m) => {
@@ -40,11 +42,8 @@ export function BookingWidget({ arenaSlug = "super-mountain-kart" }: { arenaSlug
     setError(null);
     try {
       const booking = await api.createBooking(slotId);
-      if (booking.checkout_url) {
-        window.location.href = booking.checkout_url;
-        return;
-      }
-      window.location.href = "/app/reservas";
+      router.push(`/app/reservas/pagar/${booking.id}`);
+      return;
     } catch (e) {
       const msg = e instanceof Error ? e.message : "erro";
       if (msg === "unauthorized" || msg === "http_401") {
@@ -61,8 +60,7 @@ export function BookingWidget({ arenaSlug = "super-mountain-kart" }: { arenaSlug
     <div className="border border-white/10 p-6">
       <h2 className="font-display text-3xl text-white">Reservar experiência</h2>
       <p className="mt-2 text-sm text-silver">
-        Escolha modalidade e horário na Super Mountain Kart. Pagamento via Mercado Pago
-        (mock local se não houver token).
+        Escolha o horário. O pagamento abre em seguida, com Pix ou cartão.
       </p>
 
       <div className="mt-6 flex flex-wrap gap-2">
