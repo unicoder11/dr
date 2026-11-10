@@ -19,6 +19,7 @@ coverage/
 # go
 apps/api/bin/
 deploy/bin/
+deploy/migrations/
 *.exe
 *.test
 *.out

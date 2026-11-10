@@ -6,6 +6,7 @@ import (
 	"log"
 	"os"
 	"path/filepath"
+	"sort"
 	"strings"
 	"time"
 
@@ -39,6 +40,7 @@ func main() {
 	if len(files) == 0 {
 		log.Fatalf("no migrations in %s", root)
 	}
+	sort.Strings(files)
 
 	_, err = pool.Exec(ctx, `
 		CREATE TABLE IF NOT EXISTS schema_migrations (
@@ -52,6 +54,10 @@ func main() {
 
 	for _, f := range files {
 		name := filepath.Base(f)
+		if !migrationFile(name) {
+			log.Printf("skip %s", name)
+			continue
+		}
 		var exists bool
 		if err := pool.QueryRow(ctx, `SELECT EXISTS(SELECT 1 FROM schema_migrations WHERE filename=$1)`, name).Scan(&exists); err != nil {
 			log.Fatal(err)
@@ -93,6 +99,13 @@ func extractUp(sql string) string {
 	}
 	sql = strings.ReplaceAll(sql, "-- +goose Up", "")
 	return strings.TrimSpace(sql)
+}
+
+func migrationFile(name string) bool {
+	if strings.HasPrefix(name, ".") || strings.HasPrefix(name, "_") {
+		return false
+	}
+	return strings.HasSuffix(name, ".sql")
 }
 
 func findMigrationsDir() string {

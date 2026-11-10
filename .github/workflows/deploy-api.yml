@@ -1,0 +1,58 @@
+name: deploy-api
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - "apps/api/**"
+      - "deploy/**"
+      - ".github/workflows/deploy-api.yml"
+  workflow_dispatch:
+
+concurrency:
+  group: deploy-api-prod
+  cancel-in-progress: false
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-go@v5
+        with:
+          go-version: "1.23.x"
+          cache-dependency-path: apps/api/go.sum
+
+      - name: Test
+        working-directory: apps/api
+        run: go test ./...
+
+      - name: Build linux binaries
+        working-directory: apps/api
+        env:
+          CGO_ENABLED: "0"
+          GOOS: linux
+          GOARCH: amd64
+        run: |
+          mkdir -p ../../deploy/bin
+          go build -trimpath -ldflags="-s -w" -o ../../deploy/bin/api ./cmd/api
+          go build -trimpath -ldflags="-s -w" -o ../../deploy/bin/migrate ./cmd/migrate
+          rm -rf ../../deploy/migrations
+          cp -a migrations ../../deploy/migrations
+          chmod 755 ../../deploy/remote-deploy.sh
+
+      - name: Upload and restart
+        env:
+          DEPLOY_SSH_KEY: ${{ secrets.DEPLOY_SSH_KEY }}
+          DEPLOY_HOST: ${{ secrets.DEPLOY_HOST }}
+          DEPLOY_USER: ${{ secrets.DEPLOY_USER }}
+        run: |
+          set -euo pipefail
+          mkdir -p ~/.ssh
+          printf '%s\n' "$DEPLOY_SSH_KEY" > ~/.ssh/deploy_key
+          chmod 600 ~/.ssh/deploy_key
+          ssh-keyscan -H "$DEPLOY_HOST" >> ~/.ssh/known_hosts
+          tar -C deploy -czf - bin migrations Dockerfile docker-compose.yml Caddyfile remote-deploy.sh \
+            | ssh -i ~/.ssh/deploy_key -o IdentitiesOnly=yes "$DEPLOY_USER@$DEPLOY_HOST" \
+              'tar -xzf - -C /opt/dr && sh /opt/dr/remote-deploy.sh'

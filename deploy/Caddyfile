@@ -1,0 +1,12 @@
+http://177.93.129.153 {
+	encode gzip
+	header {
+		X-Content-Type-Options nosniff
+		-Server
+	}
+	reverse_proxy dr-api:8080 {
+		header_up X-Real-IP {remote_host}
+		header_up X-Forwarded-For {remote_host}
+		header_up X-Forwarded-Proto {scheme}
+	}
+}
