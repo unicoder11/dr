@@ -7,7 +7,7 @@ export const brand = {
     gravity: "/brand/gravity-kart.png",
     lounge: "/brand/lounge.png",
     challenge: "/brand/the-challenge.png",
-    winners: "/brand/the-winners.png",
+    winners: "/brand/triumphant-racer.png",
     sunset: "/brand/complexo-sunset.png",
   },
 } as const;
