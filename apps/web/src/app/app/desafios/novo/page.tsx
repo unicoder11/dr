@@ -14,13 +14,22 @@ export default function NovoDesafioPage() {
   const [coverFile, setCoverFile] = useState<File | null>(null);
 
   useEffect(() => {
-    api.me().catch(() => router.push("/entrar"));
-    Promise.all([api.modalities(), api.arenas()])
-      .then(([m, a]) => {
-        setModalities(m);
-        setArenas(a);
-      })
-      .catch((e) => setError(e instanceof Error ? e.message : "erro"));
+    api
+      .me()
+      .then(() =>
+        Promise.all([api.modalities(), api.arenas()]).then(([m, a]) => {
+          setModalities(m);
+          setArenas(a);
+        }),
+      )
+      .catch((e) => {
+        const msg = e instanceof Error ? e.message : "erro";
+        if (msg === "unauthorized" || msg === "http_401" || msg === "http_unauthorized") {
+          router.replace("/entrar?next=/app/desafios/novo");
+          return;
+        }
+        setError(msg);
+      });
   }, [router]);
 
   async function onSubmit(e: FormEvent<HTMLFormElement>) {

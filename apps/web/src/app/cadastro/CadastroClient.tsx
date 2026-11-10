@@ -159,17 +159,22 @@ export function CadastroClient() {
     setError(null);
     setLoading(true);
     try {
+      const email = form.email.trim();
+      const password = form.password;
       await api.register({
-        email: form.email.trim(),
-        password: form.password,
+        email,
+        password,
         username: usernameClean || form.username.trim().toLowerCase(),
         display_name: form.display_name.trim(),
         referral_code: form.referral_code.trim() || undefined,
       });
-      await api.login({
-        email: form.email.trim(),
-        password: form.password,
-      });
+      // Register already sets the session cookie; login is a safe fallback
+      // for older API deploys that only create the user.
+      try {
+        await api.me();
+      } catch {
+        await api.login({ email, password });
+      }
       setDone(true);
       window.setTimeout(() => router.push("/app"), reduce ? 400 : 1100);
     } catch (e) {

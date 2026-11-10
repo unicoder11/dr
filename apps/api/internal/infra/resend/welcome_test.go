@@ -25,7 +25,7 @@ func TestWelcomePortuguese(t *testing.T) {
 	if strings.Contains(htmlBody, "<script>") {
 		t.Fatal("display name was not escaped")
 	}
-	if !strings.Contains(htmlBody, "https://desafiosreais.com/entrar") {
+	if !strings.Contains(htmlBody, "https://desafiosreais.com/app") {
 		t.Fatal("missing login url")
 	}
 }

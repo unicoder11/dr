@@ -4,8 +4,9 @@ import Image from "next/image";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { motion } from "motion/react";
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { brand } from "@/lib/brand";
+import { api, type ApiUser } from "@/lib/api";
 
 const links = [
   { href: "/", label: "Home" },
@@ -18,11 +19,29 @@ const links = [
 export function SiteHeader() {
   const pathname = usePathname();
   const [open, setOpen] = useState(false);
+  const [user, setUser] = useState<ApiUser | null | undefined>(undefined);
+
+  useEffect(() => {
+    let cancelled = false;
+    api
+      .me()
+      .then((u) => {
+        if (!cancelled) setUser(u);
+      })
+      .catch(() => {
+        if (!cancelled) setUser(null);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [pathname]);
 
   function isActive(href: string) {
     if (href === "/") return pathname === "/";
     return pathname.startsWith(href);
   }
+
+  const loggedIn = Boolean(user);
 
   return (
     <motion.header
@@ -56,18 +75,37 @@ export function SiteHeader() {
         </nav>
 
         <div className="flex shrink-0 items-center gap-1.5 md:gap-2">
-          <Link
-            href="/entrar"
-            className="hidden rounded-full px-3 py-2 text-sm text-silver transition hover:text-white md:inline"
-          >
-            Entrar
-          </Link>
-          <Link
-            href="/cadastro"
-            className="lime-gradient-btn rounded-full px-3 py-2 text-xs font-semibold transition hover:brightness-110 sm:px-4 sm:text-sm"
-          >
-            Conta
-          </Link>
+          {loggedIn ? (
+            <>
+              <Link
+                href="/app"
+                className="hidden rounded-full px-3 py-2 text-sm text-silver transition hover:text-white md:inline"
+              >
+                Hub
+              </Link>
+              <Link
+                href="/app/desafios/novo"
+                className="lime-gradient-btn rounded-full px-3 py-2 text-xs font-semibold transition hover:brightness-110 sm:px-4 sm:text-sm"
+              >
+                Criar
+              </Link>
+            </>
+          ) : (
+            <>
+              <Link
+                href="/entrar"
+                className="hidden rounded-full px-3 py-2 text-sm text-silver transition hover:text-white md:inline"
+              >
+                Entrar
+              </Link>
+              <Link
+                href="/cadastro"
+                className="lime-gradient-btn rounded-full px-3 py-2 text-xs font-semibold transition hover:brightness-110 sm:px-4 sm:text-sm"
+              >
+                Conta
+              </Link>
+            </>
+          )}
           <button
             type="button"
             className="rounded-full border border-white/15 px-3 py-2 text-xs text-white md:hidden sm:text-sm"
@@ -97,9 +135,24 @@ export function SiteHeader() {
                 {l.label}
               </Link>
             ))}
-            <Link href="/entrar" onClick={() => setOpen(false)} className="hover:text-white">
-              Entrar
-            </Link>
+            {loggedIn ? (
+              <>
+                <Link href="/app" onClick={() => setOpen(false)} className="hover:text-white">
+                  Hub{user?.username ? ` · @${user.username}` : ""}
+                </Link>
+                <Link
+                  href="/app/desafios/novo"
+                  onClick={() => setOpen(false)}
+                  className="font-semibold text-lime"
+                >
+                  Criar desafio
+                </Link>
+              </>
+            ) : (
+              <Link href="/entrar" onClick={() => setOpen(false)} className="hover:text-white">
+                Entrar
+              </Link>
+            )}
           </nav>
         </motion.div>
       )}

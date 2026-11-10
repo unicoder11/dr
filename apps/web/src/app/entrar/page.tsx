@@ -1,7 +1,7 @@
 "use client";
 
-import { FormEvent, useState } from "react";
-import { useRouter } from "next/navigation";
+import { FormEvent, Suspense, useState } from "react";
+import { useRouter, useSearchParams } from "next/navigation";
 import Link from "next/link";
 import { api } from "@/lib/api";
 import { Button } from "@/components/ui/Button";
@@ -10,7 +10,17 @@ import { GlassShell } from "@/components/layout/GlassShell";
 import { brand } from "@/lib/brand";
 
 export default function EntrarPage() {
+  return (
+    <Suspense fallback={<div className="px-6 py-28 text-center text-silver">Carregando…</div>}>
+      <EntrarForm />
+    </Suspense>
+  );
+}
+
+function EntrarForm() {
   const router = useRouter();
+  const params = useSearchParams();
+  const next = params.get("next") || "";
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
 
@@ -24,7 +34,9 @@ export default function EntrarPage() {
         email: String(fd.get("email") || ""),
         password: String(fd.get("password") || ""),
       });
-      if (user.roles.includes("admin")) {
+      if (next.startsWith("/")) {
+        router.push(next);
+      } else if (user.roles.includes("admin")) {
         router.push("/admin");
       } else {
         router.push("/app");

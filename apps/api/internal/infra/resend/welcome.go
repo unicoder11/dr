@@ -15,27 +15,27 @@ func Welcome(displayName, username, siteURL string) (subject, htmlBody, textBody
 		name = "piloto"
 	}
 	handle := strings.TrimSpace(username)
-	loginURL := strings.TrimRight(strings.TrimSpace(siteURL), "/")
-	if loginURL == "" {
-		loginURL = "http://localhost:3000"
+	hubURL := strings.TrimRight(strings.TrimSpace(siteURL), "/")
+	if hubURL == "" {
+		hubURL = "http://localhost:3000"
 	}
-	loginURL += "/entrar"
+	hubURL += "/app"
 
 	subject = "Sua conta foi criada com sucesso"
 	textBody = fmt.Sprintf(`Olá, %s!
 
 Sua conta no DESAFIOS REAIS foi criada com sucesso.
 
-Agora você já pode entrar, descobrir desafios e competir.
+Você já está pronto pra descobrir desafios, criar confrontos e competir.
 
 Usuário: @%s
-Entrar: %s
+Abrir minha área: %s
 
 Se você não criou esta conta, ignore este e-mail.
 
 Desafie. Compita. Vença.
 Equipe Desafios Reais
-`, name, handle, loginURL)
+`, name, handle, hubURL)
 
 	htmlBody = fmt.Sprintf(`<!DOCTYPE html>
 <html lang="pt-BR">
@@ -50,10 +50,10 @@ Equipe Desafios Reais
         </td></tr>
         <tr><td style="padding:8px 28px 24px;font-size:16px;line-height:1.5;color:#C9CDD3;">
           <p>Olá, <strong style="color:#F5F5F2;">%s</strong>!</p>
-          <p>Sua conta no DESAFIOS REAIS foi criada com sucesso. Agora você já pode entrar, descobrir desafios e competir.</p>
+          <p>Sua conta no DESAFIOS REAIS foi criada com sucesso. Você já pode descobrir desafios, criar confrontos e competir.</p>
           <p style="margin:20px 0;padding:12px 14px;background:#17191D;border-radius:8px;color:#F5F5F2;">Usuário: <strong>@%s</strong></p>
           <p style="margin:24px 0;">
-            <a href="%s" style="display:inline-block;background:#C7F000;color:#17191D;text-decoration:none;font-weight:700;padding:12px 18px;border-radius:6px;">Entrar na plataforma</a>
+            <a href="%s" style="display:inline-block;background:#C7F000;color:#17191D;text-decoration:none;font-weight:700;padding:12px 18px;border-radius:6px;">Abrir minha área</a>
           </p>
           <p style="font-size:13px;color:#C9CDD3;">Se você não criou esta conta, ignore este e-mail.</p>
         </td></tr>
@@ -68,7 +68,7 @@ Equipe Desafios Reais
 		html.EscapeString(subject),
 		html.EscapeString(name),
 		html.EscapeString(handle),
-		html.EscapeString(loginURL),
+		html.EscapeString(hubURL),
 	)
 	return subject, htmlBody, textBody
 }
