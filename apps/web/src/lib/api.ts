@@ -174,7 +174,54 @@ export const api = {
     }),
   logout: () => request<{ status: string }>("/api/v1/auth/logout", { method: "POST" }),
   me: () => request<ApiUser>("/api/v1/auth/me"),
-  adminUsers: () => request<unknown[]>("/api/v1/admin/users"),
+  adminOverview: () => request<AdminOverview>("/api/v1/admin/overview"),
+  adminUsers: () => request<AdminUser[]>("/api/v1/admin/users"),
+  adminGrantRole: (id: string, role: string) =>
+    request<{ status: string }>(`/api/v1/admin/users/${id}/roles`, {
+      method: "POST",
+      body: JSON.stringify({ role }),
+    }),
+  adminRevokeRole: (id: string, role: string) =>
+    request<{ status: string }>(`/api/v1/admin/users/${id}/roles`, {
+      method: "DELETE",
+      body: JSON.stringify({ role }),
+    }),
+  adminChallenges: (status?: string) =>
+    request<AdminChallenge[]>(
+      `/api/v1/admin/challenges${status ? `?status=${encodeURIComponent(status)}` : ""}`,
+    ),
+  adminModalities: () => request<Modality[]>("/api/v1/admin/modalities"),
+  adminSetModality: (id: string, active: boolean) =>
+    request<Modality>(`/api/v1/admin/modalities/${id}`, {
+      method: "PATCH",
+      body: JSON.stringify({ active }),
+    }),
+  adminFlags: () => request<AdminFlag[]>("/api/v1/admin/feature-flags"),
+  adminSetFlag: (key: string, enabled: boolean) =>
+    request<AdminFlag>(`/api/v1/admin/feature-flags/${encodeURIComponent(key)}`, {
+      method: "PATCH",
+      body: JSON.stringify({ enabled }),
+    }),
+  adminAudit: () => request<AdminAuditRow[]>("/api/v1/admin/audit"),
+  adminCreateArena: (body: {
+    name: string;
+    slug: string;
+    description?: string;
+    city?: string;
+    state?: string;
+    capacity_default?: number;
+    modality_ids?: string[];
+    publish?: boolean;
+  }) =>
+    request<Arena>("/api/v1/admin/arenas", {
+      method: "POST",
+      body: JSON.stringify(body),
+    }),
+  adminPublishArena: (slug: string, published: boolean) =>
+    request<Arena>(`/api/v1/admin/arenas/${slug}/publish`, {
+      method: "PATCH",
+      body: JSON.stringify({ published }),
+    }),
   modalities: () => request<Modality[]>("/api/v1/modalities"),
   arenas: (all?: boolean) =>
     request<Arena[]>(`/api/v1/arenas${all ? "?all=1" : ""}`),
@@ -437,5 +484,54 @@ export type Booking = {
   currency: string;
   mp_preference_id?: string;
   checkout_url?: string;
+  created_at: string;
+};
+
+export type AdminOverview = {
+  users_total: number;
+  challenges_published: number;
+  challenges_pending: number;
+  arenas_published: number;
+  bookings_confirmed: number;
+  open_slots: number;
+  live_streams: number;
+};
+
+export type AdminUser = {
+  id: string;
+  email: string;
+  username: string;
+  display_name: string;
+  roles: string[];
+  status: string;
+  created_at: string;
+};
+
+export type AdminChallenge = {
+  id: string;
+  slug: string;
+  title: string;
+  status: string;
+  modality_name: string;
+  arena_name: string;
+  creator_username: string;
+  starts_at: string;
+  created_at: string;
+};
+
+export type AdminFlag = {
+  key: string;
+  enabled: boolean;
+  metadata?: Record<string, unknown>;
+};
+
+export type AdminAuditRow = {
+  id: string;
+  actor_user_id?: string;
+  actor_username?: string;
+  action: string;
+  entity_type: string;
+  entity_id: string;
+  payload: unknown;
   created_at: string;
 };

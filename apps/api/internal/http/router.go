@@ -108,9 +108,16 @@ func NewRouter(cfg config.Config, db *pgxpool.Pool) http.Handler {
 	mux.HandleFunc("GET /api/v1/challenges/{idOrSlug}/results", opsH.GetResult)
 	mux.HandleFunc("GET /api/v1/rankings", opsH.Rankings)
 
+	mux.Handle("GET /api/v1/admin/overview", middleware.RequireAuth(middleware.RequireAdmin(http.HandlerFunc(adminH.Overview))))
 	mux.Handle("GET /api/v1/admin/users", middleware.RequireAuth(middleware.RequireAdmin(http.HandlerFunc(adminH.ListUsers))))
 	mux.Handle("POST /api/v1/admin/users/{id}/roles", middleware.RequireAuth(middleware.RequireAdmin(http.HandlerFunc(adminH.GrantRole))))
+	mux.Handle("DELETE /api/v1/admin/users/{id}/roles", middleware.RequireAuth(middleware.RequireAdmin(http.HandlerFunc(adminH.RevokeRole))))
+	mux.Handle("GET /api/v1/admin/challenges", middleware.RequireAuth(middleware.RequireAdmin(http.HandlerFunc(adminH.ListChallenges))))
+	mux.Handle("GET /api/v1/admin/modalities", middleware.RequireAuth(middleware.RequireAdmin(http.HandlerFunc(adminH.ListModalities))))
+	mux.Handle("PATCH /api/v1/admin/modalities/{id}", middleware.RequireAuth(middleware.RequireAdmin(http.HandlerFunc(adminH.SetModalityActive))))
 	mux.Handle("GET /api/v1/admin/feature-flags", middleware.RequireAuth(middleware.RequireAdmin(http.HandlerFunc(adminH.ListFlags))))
+	mux.Handle("PATCH /api/v1/admin/feature-flags/{key}", middleware.RequireAuth(middleware.RequireAdmin(http.HandlerFunc(adminH.SetFlag))))
+	mux.Handle("GET /api/v1/admin/audit", middleware.RequireAuth(middleware.RequireAdmin(http.HandlerFunc(adminH.ListAudit))))
 
 	var handler http.Handler = mux
 	handler = middleware.Authenticate(identitySvc)(handler)

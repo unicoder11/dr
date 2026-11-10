@@ -14,15 +14,21 @@ type AdminHandler struct {
 	Admin *admin.Service
 }
 
+func (h AdminHandler) Overview(w http.ResponseWriter, r *http.Request) {
+	u, _ := middleware.UserFromContext(r.Context())
+	o, err := h.Admin.Overview(r.Context(), u.Roles)
+	if err != nil {
+		mapAdminErr(w, err)
+		return
+	}
+	writeJSON(w, http.StatusOK, o)
+}
+
 func (h AdminHandler) ListUsers(w http.ResponseWriter, r *http.Request) {
 	u, _ := middleware.UserFromContext(r.Context())
 	users, err := h.Admin.ListUsers(r.Context(), u.Roles)
 	if err != nil {
-		if errors.Is(err, admin.ErrForbidden) {
-			writeJSON(w, http.StatusForbidden, map[string]string{"error": "forbidden"})
-			return
-		}
-		writeJSON(w, http.StatusInternalServerError, map[string]string{"error": "internal"})
+		mapAdminErr(w, err)
 		return
 	}
 	writeJSON(w, http.StatusOK, users)
@@ -34,8 +40,7 @@ type grantRoleReq struct {
 
 func (h AdminHandler) GrantRole(w http.ResponseWriter, r *http.Request) {
 	u, _ := middleware.UserFromContext(r.Context())
-	idStr := r.PathValue("id")
-	userID, err := uuid.Parse(idStr)
+	userID, err := uuid.Parse(r.PathValue("id"))
 	if err != nil {
 		writeJSON(w, http.StatusBadRequest, map[string]string{"error": "invalid_id"})
 		return
@@ -46,11 +51,26 @@ func (h AdminHandler) GrantRole(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	if err := h.Admin.GrantRole(r.Context(), u.ID, u.Roles, userID, req.Role); err != nil {
-		if errors.Is(err, admin.ErrForbidden) {
-			writeJSON(w, http.StatusForbidden, map[string]string{"error": "forbidden"})
-			return
-		}
-		writeJSON(w, http.StatusBadRequest, map[string]string{"error": err.Error()})
+		mapAdminErr(w, err)
+		return
+	}
+	writeJSON(w, http.StatusOK, map[string]string{"status": "ok"})
+}
+
+func (h AdminHandler) RevokeRole(w http.ResponseWriter, r *http.Request) {
+	u, _ := middleware.UserFromContext(r.Context())
+	userID, err := uuid.Parse(r.PathValue("id"))
+	if err != nil {
+		writeJSON(w, http.StatusBadRequest, map[string]string{"error": "invalid_id"})
+		return
+	}
+	var req grantRoleReq
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		writeJSON(w, http.StatusBadRequest, map[string]string{"error": "invalid_json"})
+		return
+	}
+	if err := h.Admin.RevokeRole(r.Context(), u.ID, u.Roles, userID, req.Role); err != nil {
+		mapAdminErr(w, err)
 		return
 	}
 	writeJSON(w, http.StatusOK, map[string]string{"status": "ok"})
@@ -60,12 +80,89 @@ func (h AdminHandler) ListFlags(w http.ResponseWriter, r *http.Request) {
 	u, _ := middleware.UserFromContext(r.Context())
 	flags, err := h.Admin.ListFlags(r.Context(), u.Roles)
 	if err != nil {
-		if errors.Is(err, admin.ErrForbidden) {
-			writeJSON(w, http.StatusForbidden, map[string]string{"error": "forbidden"})
-			return
-		}
-		writeJSON(w, http.StatusInternalServerError, map[string]string{"error": "internal"})
+		mapAdminErr(w, err)
 		return
 	}
 	writeJSON(w, http.StatusOK, flags)
+}
+
+type setFlagReq struct {
+	Enabled bool `json:"enabled"`
+}
+
+func (h AdminHandler) SetFlag(w http.ResponseWriter, r *http.Request) {
+	u, _ := middleware.UserFromContext(r.Context())
+	var req setFlagReq
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		writeJSON(w, http.StatusBadRequest, map[string]string{"error": "invalid_json"})
+		return
+	}
+	f, err := h.Admin.SetFlag(r.Context(), u.ID, u.Roles, r.PathValue("key"), req.Enabled)
+	if err != nil {
+		mapAdminErr(w, err)
+		return
+	}
+	writeJSON(w, http.StatusOK, f)
+}
+
+func (h AdminHandler) ListChallenges(w http.ResponseWriter, r *http.Request) {
+	u, _ := middleware.UserFromContext(r.Context())
+	list, err := h.Admin.ListChallenges(r.Context(), u.Roles, r.URL.Query().Get("status"))
+	if err != nil {
+		mapAdminErr(w, err)
+		return
+	}
+	writeJSON(w, http.StatusOK, list)
+}
+
+func (h AdminHandler) ListAudit(w http.ResponseWriter, r *http.Request) {
+	u, _ := middleware.UserFromContext(r.Context())
+	list, err := h.Admin.ListAudit(r.Context(), u.Roles)
+	if err != nil {
+		mapAdminErr(w, err)
+		return
+	}
+	writeJSON(w, http.StatusOK, list)
+}
+
+func (h AdminHandler) ListModalities(w http.ResponseWriter, r *http.Request) {
+	u, _ := middleware.UserFromContext(r.Context())
+	list, err := h.Admin.ListModalities(r.Context(), u.Roles)
+	if err != nil {
+		mapAdminErr(w, err)
+		return
+	}
+	writeJSON(w, http.StatusOK, list)
+}
+
+type setModalityReq struct {
+	Active bool `json:"active"`
+}
+
+func (h AdminHandler) SetModalityActive(w http.ResponseWriter, r *http.Request) {
+	u, _ := middleware.UserFromContext(r.Context())
+	var req setModalityReq
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		writeJSON(w, http.StatusBadRequest, map[string]string{"error": "invalid_json"})
+		return
+	}
+	m, err := h.Admin.SetModalityActive(r.Context(), u.ID, u.Roles, r.PathValue("id"), req.Active)
+	if err != nil {
+		mapAdminErr(w, err)
+		return
+	}
+	writeJSON(w, http.StatusOK, m)
+}
+
+func mapAdminErr(w http.ResponseWriter, err error) {
+	switch {
+	case errors.Is(err, admin.ErrForbidden):
+		writeJSON(w, http.StatusForbidden, map[string]string{"error": "forbidden"})
+	case errors.Is(err, admin.ErrNotFound):
+		writeJSON(w, http.StatusNotFound, map[string]string{"error": "not_found"})
+	case errors.Is(err, admin.ErrInvalidInput):
+		writeJSON(w, http.StatusBadRequest, map[string]string{"error": "invalid_input"})
+	default:
+		writeJSON(w, http.StatusBadRequest, map[string]string{"error": err.Error()})
+	}
 }

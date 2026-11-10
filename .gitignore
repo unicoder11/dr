@@ -18,6 +18,7 @@ coverage/
 
 # go
 apps/api/bin/
+deploy/bin/
 *.exe
 *.test
 *.out
