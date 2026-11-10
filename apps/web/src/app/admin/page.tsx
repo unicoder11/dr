@@ -5,7 +5,20 @@ import Link from "next/link";
 import { AdminGate } from "@/components/admin/AdminGate";
 import { AdminShell, AdminStat } from "@/components/admin/AdminShell";
 import { GlassPanel } from "@/components/ui/Glass";
-import { api, type AdminOverview, type AdminChallenge, type AdminAuditRow } from "@/lib/api";
+import {
+  api,
+  type AdminOverview,
+  type AdminChallenge,
+  type AdminAuditRow,
+  type AdminFinanceOverview,
+} from "@/lib/api";
+
+function formatBRL(cents: number) {
+  return (cents / 100).toLocaleString("pt-BR", {
+    style: "currency",
+    currency: "BRL",
+  });
+}
 
 export default function AdminDashboardPage() {
   return (
@@ -17,6 +30,7 @@ export default function AdminDashboardPage() {
 
 function Dashboard() {
   const [overview, setOverview] = useState<AdminOverview | null>(null);
+  const [finance, setFinance] = useState<AdminFinanceOverview | null>(null);
   const [pending, setPending] = useState<AdminChallenge[]>([]);
   const [audit, setAudit] = useState<AdminAuditRow[]>([]);
   const [error, setError] = useState<string | null>(null);
@@ -24,11 +38,13 @@ function Dashboard() {
   useEffect(() => {
     Promise.all([
       api.adminOverview(),
+      api.adminFinanceOverview(),
       api.adminChallenges("pending_approval"),
       api.adminAudit(),
     ])
-      .then(([o, c, a]) => {
+      .then(([o, f, c, a]) => {
         setOverview(o);
+        setFinance(f);
         setPending(c.slice(0, 5));
         setAudit(a.slice(0, 8));
       })
@@ -60,18 +76,26 @@ function Dashboard() {
         />
       </div>
 
-      <div className="mt-3 grid gap-3 sm:grid-cols-3">
+      <div className="mt-3 grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
         <AdminStat label="Arenas publicadas" value={overview?.arenas_published ?? "—"} />
         <AdminStat label="Lives" value={overview?.live_streams ?? "—"} />
+        <AdminStat
+          label="Receita paga"
+          value={finance ? formatBRL(finance.paid_cents) : "—"}
+          hint={`${finance?.paid_count ?? 0} pagamentos · 7d ${finance ? formatBRL(finance.last_7d_paid_cents) : "—"}`}
+        />
         <Link
-          href="/admin/desafios?status=pending_approval"
+          href="/admin/financeiro"
           className="glass-card flex items-center justify-between rounded-2xl p-5 transition hover:border-lime/40"
         >
           <div>
             <p className="text-[10px] font-semibold uppercase tracking-[0.18em] text-lime">
-              Ação rápida
+              Financeiro
             </p>
-            <p className="mt-2 font-display text-2xl text-white">Moderar desafios</p>
+            <p className="mt-2 font-display text-2xl text-white">Ver pagamentos</p>
+            <p className="mt-1 text-xs text-silver">
+              Pendente {finance ? formatBRL(finance.pending_cents) : "—"}
+            </p>
           </div>
           <span className="text-lime">→</span>
         </Link>

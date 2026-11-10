@@ -131,6 +131,9 @@ func NewRouter(cfg config.Config, db *pgxpool.Pool) http.Handler {
 	mux.Handle("GET /api/v1/admin/feature-flags", middleware.RequireAuth(middleware.RequireAdmin(http.HandlerFunc(adminH.ListFlags))))
 	mux.Handle("PATCH /api/v1/admin/feature-flags/{key}", middleware.RequireAuth(middleware.RequireAdmin(http.HandlerFunc(adminH.SetFlag))))
 	mux.Handle("GET /api/v1/admin/audit", middleware.RequireAuth(middleware.RequireAdmin(http.HandlerFunc(adminH.ListAudit))))
+	mux.Handle("GET /api/v1/admin/finance/overview", middleware.RequireAuth(middleware.RequireAdmin(http.HandlerFunc(adminH.FinanceOverview))))
+	mux.Handle("GET /api/v1/admin/finance/payments", middleware.RequireAuth(middleware.RequireAdmin(http.HandlerFunc(adminH.ListPayments))))
+	mux.Handle("PATCH /api/v1/admin/finance/payments/{kind}/{id}", middleware.RequireAuth(middleware.RequireAdmin(http.HandlerFunc(adminH.SetPaymentStatus))))
 
 	var handler http.Handler = mux
 	handler = middleware.Authenticate(identitySvc)(handler)

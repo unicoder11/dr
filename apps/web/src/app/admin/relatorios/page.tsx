@@ -4,7 +4,14 @@ import { useEffect, useState } from "react";
 import { AdminGate } from "@/components/admin/AdminGate";
 import { AdminShell, AdminStat } from "@/components/admin/AdminShell";
 import { GlassPanel } from "@/components/ui/Glass";
-import { api, type AdminOverview } from "@/lib/api";
+import { api, type AdminOverview, type AdminFinanceOverview } from "@/lib/api";
+
+function formatBRL(cents: number) {
+  return (cents / 100).toLocaleString("pt-BR", {
+    style: "currency",
+    currency: "BRL",
+  });
+}
 
 export default function AdminRelatoriosPage() {
   return (
@@ -16,12 +23,15 @@ export default function AdminRelatoriosPage() {
 
 function RelatoriosPanel() {
   const [o, setO] = useState<AdminOverview | null>(null);
+  const [f, setF] = useState<AdminFinanceOverview | null>(null);
   const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
-    api
-      .adminOverview()
-      .then(setO)
+    Promise.all([api.adminOverview(), api.adminFinanceOverview()])
+      .then(([ov, fin]) => {
+        setO(ov);
+        setF(fin);
+      })
       .catch((e) => setError(e instanceof Error ? e.message : "erro"));
   }, []);
 
@@ -59,20 +69,42 @@ function RelatoriosPanel() {
         />
         <AdminStat label="Slots abertos" value={o?.open_slots ?? "—"} />
         <AdminStat label="Arenas ativas" value={o?.arenas_published ?? "—"} />
+        <AdminStat
+          label="GMV pago"
+          value={f ? formatBRL(f.paid_cents) : "—"}
+          hint={`${f?.paid_count ?? 0} txs`}
+        />
+        <AdminStat
+          label="GMV 7 dias"
+          value={f ? formatBRL(f.last_7d_paid_cents) : "—"}
+        />
+        <AdminStat
+          label="Pendente / reembolsado"
+          value={
+            f
+              ? `${formatBRL(f.pending_cents)} / ${formatBRL(f.refunded_cents)}`
+              : "—"
+          }
+        />
       </div>
 
       <GlassPanel className="mt-6 !rounded-2xl p-5">
         <h2 className="font-display text-2xl text-white">Notas</h2>
         <ul className="mt-3 list-disc space-y-2 pl-5 text-sm text-silver">
           <li>
-            Relatórios financeiros detalhados (GMV, MP settlements) entram após
-            webhook de pagamento estável.
+            Detalhe de pagamentos e reembolsos manuais:{" "}
+            <a href="/admin/financeiro" className="text-lime hover:underline">
+              /admin/financeiro
+            </a>
+            .
+          </li>
+          <li>
+            Settlements Mercado Pago (split/repasse) entram após webhook estável.
           </li>
           <li>
             Share rate e tempo até 1ª reserva exigem eventos de analytics
             agregados (Fase 5).
           </li>
-          <li>Este painel usa o mesmo overview da API admin — sem cache.</li>
         </ul>
       </GlassPanel>
     </AdminShell>

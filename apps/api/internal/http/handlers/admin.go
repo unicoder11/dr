@@ -154,6 +154,55 @@ func (h AdminHandler) SetModalityActive(w http.ResponseWriter, r *http.Request) 
 	writeJSON(w, http.StatusOK, m)
 }
 
+func (h AdminHandler) FinanceOverview(w http.ResponseWriter, r *http.Request) {
+	u, _ := middleware.UserFromContext(r.Context())
+	o, err := h.Admin.FinanceOverview(r.Context(), u.Roles)
+	if err != nil {
+		mapAdminErr(w, err)
+		return
+	}
+	writeJSON(w, http.StatusOK, o)
+}
+
+func (h AdminHandler) ListPayments(w http.ResponseWriter, r *http.Request) {
+	u, _ := middleware.UserFromContext(r.Context())
+	q := r.URL.Query()
+	list, err := h.Admin.ListPayments(r.Context(), u.Roles, admin.PaymentListFilter{
+		Kind:   q.Get("kind"),
+		Status: q.Get("status"),
+		Method: q.Get("method"),
+	})
+	if err != nil {
+		mapAdminErr(w, err)
+		return
+	}
+	writeJSON(w, http.StatusOK, list)
+}
+
+type setPaymentStatusReq struct {
+	Status string `json:"status"`
+}
+
+func (h AdminHandler) SetPaymentStatus(w http.ResponseWriter, r *http.Request) {
+	u, _ := middleware.UserFromContext(r.Context())
+	paymentID, err := uuid.Parse(r.PathValue("id"))
+	if err != nil {
+		writeJSON(w, http.StatusBadRequest, map[string]string{"error": "invalid_id"})
+		return
+	}
+	var req setPaymentStatusReq
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		writeJSON(w, http.StatusBadRequest, map[string]string{"error": "invalid_json"})
+		return
+	}
+	p, err := h.Admin.SetPaymentStatus(r.Context(), u.ID, u.Roles, r.PathValue("kind"), paymentID, req.Status)
+	if err != nil {
+		mapAdminErr(w, err)
+		return
+	}
+	writeJSON(w, http.StatusOK, p)
+}
+
 func mapAdminErr(w http.ResponseWriter, err error) {
 	switch {
 	case errors.Is(err, admin.ErrForbidden):

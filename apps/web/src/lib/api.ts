@@ -207,6 +207,31 @@ export const api = {
       body: JSON.stringify({ enabled }),
     }),
   adminAudit: () => request<AdminAuditRow[]>("/api/v1/admin/audit"),
+  adminFinanceOverview: () =>
+    request<AdminFinanceOverview>("/api/v1/admin/finance/overview"),
+  adminFinancePayments: (params?: {
+    kind?: string;
+    status?: string;
+    method?: string;
+  }) => {
+    const q = new URLSearchParams();
+    if (params?.kind) q.set("kind", params.kind);
+    if (params?.status) q.set("status", params.status);
+    if (params?.method) q.set("method", params.method);
+    const qs = q.toString();
+    return request<AdminPayment[]>(
+      `/api/v1/admin/finance/payments${qs ? `?${qs}` : ""}`,
+    );
+  },
+  adminSetPaymentStatus: (
+    kind: "submission" | "entry",
+    id: string,
+    status: string,
+  ) =>
+    request<AdminPayment>(`/api/v1/admin/finance/payments/${kind}/${id}`, {
+      method: "PATCH",
+      body: JSON.stringify({ status }),
+    }),
   adminCreateArena: (body: {
     name: string;
     slug: string;
@@ -562,4 +587,36 @@ export type AdminAuditRow = {
   entity_id: string;
   payload: unknown;
   created_at: string;
+};
+
+export type AdminFinanceOverview = {
+  paid_cents: number;
+  paid_count: number;
+  pending_cents: number;
+  pending_count: number;
+  refunded_cents: number;
+  refunded_count: number;
+  failed_count: number;
+  last_7d_paid_cents: number;
+  by_kind_paid_cents: Record<string, number>;
+  by_method_paid_cents: Record<string, number>;
+};
+
+export type AdminPayment = {
+  id: string;
+  kind: "submission" | "entry" | "booking" | string;
+  status: string;
+  method: string;
+  amount_cents: number;
+  currency: string;
+  provider_payment_id: string;
+  user_id: string;
+  username: string;
+  email: string;
+  challenge_id?: string;
+  challenge_slug?: string;
+  challenge_title?: string;
+  arena_name?: string;
+  created_at: string;
+  can_refund: boolean;
 };
