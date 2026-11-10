@@ -25,6 +25,11 @@ const steps = [
   },
   {
     n: "04",
+    title: "Deposite o valor do seu desafio",
+    body: "Confirme a participação depositando o valor do desafio antes da largada.",
+  },
+  {
+    n: "05",
     title: "Resultado oficial",
     body: "Ops valida o resultado. Ranking e conquistas atualizam automaticamente.",
   },
