@@ -27,7 +27,8 @@ func NewRouter(cfg config.Config, db *pgxpool.Pool) http.Handler {
 	adminSvc := admin.NewService(db)
 	challengeSvc := challenges.NewService(db).
 		WithPublicURL(cfg.PublicURL).
-		WithSubmissionFee(cfg.ChallengeSubmissionFeeCents)
+		WithSubmissionFee(cfg.ChallengeSubmissionFeeCents).
+		WithEntryFee(cfg.ChallengeEntryFeeCents)
 	notifSvc := notifications.NewService(db)
 	opsSvc := ops.NewService(db)
 	communitySvc := community.NewService(db)
@@ -94,6 +95,7 @@ func NewRouter(cfg config.Config, db *pgxpool.Pool) http.Handler {
 	mux.HandleFunc("GET /api/v1/live", mediaH.ListLive)
 	mux.HandleFunc("GET /api/v1/challenges/{idOrSlug}/participants", partH.List)
 	mux.Handle("POST /api/v1/challenges/{idOrSlug}/join", middleware.RequireAuth(http.HandlerFunc(partH.Join)))
+	mux.Handle("POST /api/v1/challenges/{idOrSlug}/pay-join", middleware.RequireAuth(http.HandlerFunc(partH.PayAndJoin)))
 	mux.Handle("POST /api/v1/challenges/{idOrSlug}/invites", middleware.RequireAuth(http.HandlerFunc(partH.Invite)))
 	mux.Handle("POST /api/v1/participants/{id}/accept", middleware.RequireAuth(http.HandlerFunc(partH.Accept)))
 	mux.Handle("POST /api/v1/participants/{id}/decline", middleware.RequireAuth(http.HandlerFunc(partH.Decline)))

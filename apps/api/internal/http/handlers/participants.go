@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"errors"
 	"net/http"
+	"strings"
 
 	"github.com/desafiosreais/dr/apps/api/internal/http/middleware"
 	"github.com/desafiosreais/dr/apps/api/internal/modules/challenges"
@@ -43,6 +44,48 @@ func (h ParticipantsHandler) Join(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	p, err := h.Challenges.Join(r.Context(), actor, r.PathValue("idOrSlug"))
+	if err != nil {
+		mapParticipantErr(w, err)
+		return
+	}
+	if h.Community != nil {
+		_ = h.Community.GrantAchievement(r.Context(), actor.ID, "challenger")
+	}
+	writeJSON(w, http.StatusOK, p)
+}
+
+type payJoinBody struct {
+	Method string `json:"method"`
+	Holder string `json:"holder"`
+	Number string `json:"number"`
+	Expiry string `json:"expiry"`
+	CVV    string `json:"cvv"`
+}
+
+func (h ParticipantsHandler) PayAndJoin(w http.ResponseWriter, r *http.Request) {
+	actor, ok := h.actor(r)
+	if !ok {
+		writeJSON(w, http.StatusUnauthorized, map[string]string{"error": "unauthorized"})
+		return
+	}
+	var body payJoinBody
+	if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
+		writeJSON(w, http.StatusBadRequest, map[string]string{"error": "invalid_json"})
+		return
+	}
+	method := strings.ToLower(strings.TrimSpace(body.Method))
+	last4 := ""
+	if method == "card" {
+		digits := onlyDigits(body.Number)
+		if len(digits) < 13 || len(body.CVV) < 3 || strings.TrimSpace(body.Holder) == "" || strings.TrimSpace(body.Expiry) == "" {
+			writeJSON(w, http.StatusBadRequest, map[string]string{"error": "invalid_card"})
+			return
+		}
+		if len(digits) >= 4 {
+			last4 = digits[len(digits)-4:]
+		}
+	}
+	p, err := h.Challenges.PayAndJoin(r.Context(), actor, r.PathValue("idOrSlug"), method, last4)
 	if err != nil {
 		mapParticipantErr(w, err)
 		return
@@ -186,6 +229,8 @@ func mapParticipantErr(w http.ResponseWriter, err error) {
 		writeJSON(w, http.StatusConflict, map[string]string{"error": "already_participant"})
 	case errors.Is(err, challenges.ErrNotJoinable):
 		writeJSON(w, http.StatusConflict, map[string]string{"error": "not_joinable"})
+	case errors.Is(err, challenges.ErrPaymentRequired):
+		writeJSON(w, http.StatusPaymentRequired, map[string]string{"error": "payment_required"})
 	case errors.Is(err, challenges.ErrInvalidInput):
 		writeJSON(w, http.StatusBadRequest, map[string]string{"error": "invalid_input"})
 	default:

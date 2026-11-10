@@ -58,24 +58,6 @@ export default function ChallengePublicPage() {
     }
   }
 
-  async function join() {
-    if (!challenge) return;
-    if (!user) {
-      window.location.href = "/entrar";
-      return;
-    }
-    setBusy(true);
-    setError(null);
-    try {
-      await api.joinChallenge(challenge.slug);
-      await load();
-    } catch (e) {
-      setError(e instanceof Error ? e.message : "erro");
-    } finally {
-      setBusy(false);
-    }
-  }
-
   async function onInvite(e: FormEvent) {
     e.preventDefault();
     if (!challenge || !inviteUser.trim()) return;
@@ -241,8 +223,8 @@ export default function ChallengePublicPage() {
 
       <div className="mt-10 flex flex-wrap gap-3">
         {canJoin && (
-          <Button disabled={busy} onClick={join}>
-            Participar
+          <Button href={`/desafios/${challenge.slug}/participar`}>
+            {`Participar · ${((challenge.entry_fee_cents ?? 9900) / 100).toLocaleString("pt-BR", { style: "currency", currency: "BRL" })}`}
           </Button>
         )}
         {canSubmit && !challenge.submission_paid && (

@@ -27,13 +27,14 @@ var (
 )
 
 type Service struct {
-	db        *pgxpool.Pool
-	publicURL string
-	feeCents  int
+	db               *pgxpool.Pool
+	publicURL        string
+	submissionFeeCents int
+	entryFeeCents      int
 }
 
 func NewService(db *pgxpool.Pool) *Service {
-	return &Service{db: db, feeCents: 9900}
+	return &Service{db: db, submissionFeeCents: 9900, entryFeeCents: 9900}
 }
 
 func (s *Service) WithPublicURL(url string) *Service {
@@ -43,7 +44,14 @@ func (s *Service) WithPublicURL(url string) *Service {
 
 func (s *Service) WithSubmissionFee(cents int) *Service {
 	if cents >= 0 {
-		s.feeCents = cents
+		s.submissionFeeCents = cents
+	}
+	return s
+}
+
+func (s *Service) WithEntryFee(cents int) *Service {
+	if cents >= 0 {
+		s.entryFeeCents = cents
 	}
 	return s
 }
@@ -73,6 +81,8 @@ type Challenge struct {
 	IsDemo               bool       `json:"is_demo"`
 	SubmissionFeeCents   int        `json:"submission_fee_cents"`
 	SubmissionPaid       bool       `json:"submission_paid"`
+	EntryFeeCents        int        `json:"entry_fee_cents"`
+	EntryPaidByMe        bool       `json:"entry_paid_by_me"`
 	Derived              Derived    `json:"derived"`
 	CreatedAt            time.Time  `json:"created_at"`
 	UpdatedAt            time.Time  `json:"updated_at"`
@@ -502,7 +512,8 @@ func (s *Service) scanChallenge(row scannable) (Challenge, error) {
 	if err != nil {
 		return Challenge{}, err
 	}
-	ch.SubmissionFeeCents = s.feeCents
+	ch.SubmissionFeeCents = s.submissionFeeCents
+	ch.EntryFeeCents = s.entryFeeCents
 	if ch.CoverAssetID != nil && s.publicURL != "" {
 		ch.CoverURL = s.publicURL + "/media/" + ch.CoverAssetID.String()
 	}
@@ -520,12 +531,30 @@ func (s *Service) isSubmissionPaid(ctx context.Context, challengeID uuid.UUID) (
 	return paid, err
 }
 
-func (s *Service) enrichPayment(ctx context.Context, ch *Challenge) {
-	ch.SubmissionFeeCents = s.feeCents
+func (s *Service) enrichPayment(ctx context.Context, ch *Challenge, viewer IdentityActor) {
+	ch.SubmissionFeeCents = s.submissionFeeCents
+	ch.EntryFeeCents = s.entryFeeCents
 	paid, err := s.isSubmissionPaid(ctx, ch.ID)
 	if err == nil {
 		ch.SubmissionPaid = paid
 	}
+	if viewer.ID != uuid.Nil {
+		entryPaid, err := s.isEntryPaid(ctx, ch.ID, viewer.ID)
+		if err == nil {
+			ch.EntryPaidByMe = entryPaid
+		}
+	}
+}
+
+func (s *Service) isEntryPaid(ctx context.Context, challengeID, userID uuid.UUID) (bool, error) {
+	var paid bool
+	err := s.db.QueryRow(ctx, `
+		SELECT EXISTS(
+			SELECT 1 FROM challenge_entry_payments
+			WHERE challenge_id = $1 AND user_id = $2 AND status = 'paid'
+		)
+	`, challengeID, userID).Scan(&paid)
+	return paid, err
 }
 
 func (s *Service) Get(ctx context.Context, idOrSlug string, viewer IdentityActor) (Challenge, error) {
@@ -550,7 +579,7 @@ func (s *Service) Get(ctx context.Context, idOrSlug string, viewer IdentityActor
 	if !canView(viewer, ch) {
 		return Challenge{}, ErrNotFound
 	}
-	s.enrichPayment(ctx, &ch)
+	s.enrichPayment(ctx, &ch, viewer)
 	return ch, nil
 }
 
@@ -607,7 +636,7 @@ func (s *Service) PayAndSubmit(ctx context.Context, actor IdentityActor, idOrSlu
 			INSERT INTO challenge_submission_payments (
 				id, challenge_id, user_id, amount_cents, currency, method, status, provider_payment_id, raw_payload
 			) VALUES ($1,$2,$3,$4,'BRL',$5,'paid',$6,$7::jsonb)
-		`, uuid.New(), ch.ID, actor.ID, s.feeCents, method, paymentID, raw)
+		`, uuid.New(), ch.ID, actor.ID, s.submissionFeeCents, method, paymentID, raw)
 		if err != nil {
 			return Challenge{}, err
 		}
@@ -623,7 +652,7 @@ func (s *Service) PayAndSubmit(ctx context.Context, actor IdentityActor, idOrSlu
 		INSERT INTO audit_logs (id, actor_user_id, action, entity_type, entity_id, payload)
 		VALUES ($1,$2,'challenge_pay_submit','challenge',$3,
 		        jsonb_build_object('method',$4::text,'amount_cents',$5::int,'to','pending_approval'))
-	`, uuid.New(), actor.ID, ch.ID.String(), method, s.feeCents)
+	`, uuid.New(), actor.ID, ch.ID.String(), method, s.submissionFeeCents)
 
 	if err := tx.Commit(ctx); err != nil {
 		return Challenge{}, err

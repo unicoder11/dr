@@ -19,19 +19,6 @@ export default function ConvitesPage() {
     load().catch((e) => setError(e instanceof Error ? e.message : "erro"));
   }, []);
 
-  async function accept(id: string) {
-    setBusy(id);
-    setError(null);
-    try {
-      await api.acceptInvite(id);
-      await load();
-    } catch (e) {
-      setError(e instanceof Error ? e.message : "erro");
-    } finally {
-      setBusy(null);
-    }
-  }
-
   async function decline(id: string) {
     setBusy(id);
     setError(null);
@@ -70,9 +57,9 @@ export default function ConvitesPage() {
                 {inv.challenge_title}
               </Link>
               <p className="mt-1 text-sm text-silver">{when}</p>
-              <div className="mt-4 flex gap-3">
-                <Button disabled={busy === inv.id} onClick={() => accept(inv.id)}>
-                  Aceitar
+              <div className="mt-4 flex flex-wrap gap-3">
+                <Button href={`/desafios/${inv.challenge_slug}/participar`}>
+                  Aceitar e pagar
                 </Button>
                 <Button
                   disabled={busy === inv.id}

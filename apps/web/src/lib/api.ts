@@ -55,6 +55,8 @@ export type Challenge = {
   is_demo: boolean;
   submission_fee_cents?: number;
   submission_paid?: boolean;
+  entry_fee_cents?: number;
+  entry_paid_by_me?: boolean;
   derived: {
     scheduled: boolean;
     open: boolean;
@@ -281,6 +283,14 @@ export const api = {
     request<Participant[]>(`/api/v1/challenges/${idOrSlug}/participants`),
   joinChallenge: (idOrSlug: string) =>
     request<Participant>(`/api/v1/challenges/${idOrSlug}/join`, { method: "POST" }),
+  payJoinChallenge: (
+    idOrSlug: string,
+    body: { method: "pix" | "card"; holder?: string; number?: string; expiry?: string; cvv?: string },
+  ) =>
+    request<Participant>(`/api/v1/challenges/${idOrSlug}/pay-join`, {
+      method: "POST",
+      body: JSON.stringify(body),
+    }),
   invite: (idOrSlug: string, username: string) =>
     request<Participant>(`/api/v1/challenges/${idOrSlug}/invites`, {
       method: "POST",

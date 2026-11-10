@@ -90,6 +90,19 @@ func (s *Service) ListParticipants(ctx context.Context, idOrSlug string, viewer 
 }
 
 func (s *Service) Join(ctx context.Context, actor IdentityActor, idOrSlug string) (Participant, error) {
+	// Free join is disabled — entry requires payment via PayAndJoin.
+	_, err := s.Get(ctx, idOrSlug, actor)
+	if err != nil {
+		return Participant{}, err
+	}
+	return Participant{}, ErrPaymentRequired
+}
+
+// PayAndJoin charges the entry fee and confirms the participant on a published challenge.
+func (s *Service) PayAndJoin(ctx context.Context, actor IdentityActor, idOrSlug, method, last4 string) (Participant, error) {
+	if method != "pix" && method != "card" {
+		return Participant{}, ErrInvalidInput
+	}
 	ch, err := s.Get(ctx, idOrSlug, actor)
 	if err != nil {
 		return Participant{}, err
@@ -109,36 +122,16 @@ func (s *Service) Join(ctx context.Context, actor IdentityActor, idOrSlug string
 
 	var existingID uuid.UUID
 	var existingStatus string
+	hasRow := false
 	err = tx.QueryRow(ctx, `
 		SELECT id, status FROM challenge_participants
 		WHERE challenge_id = $1 AND user_id = $2
+		FOR UPDATE
 	`, ch.ID, actor.ID).Scan(&existingID, &existingStatus)
 	if err == nil {
-		switch existingStatus {
-		case PartConfirmed, PartCheckedIn, PartInvited:
+		hasRow = true
+		if existingStatus == PartConfirmed || existingStatus == PartCheckedIn {
 			return Participant{}, ErrAlreadyParticipant
-		case PartDeclined, PartCancelled:
-			_, err = tx.Exec(ctx, `
-				UPDATE challenge_participants
-				SET status = $2, updated_at = now(), invited_by = NULL
-				WHERE id = $1
-			`, existingID, PartConfirmed)
-			if err != nil {
-				return Participant{}, err
-			}
-			if err := s.lockAndCheckCapacity(ctx, tx, ch.ID, ch.Capacity); err != nil {
-				return Participant{}, err
-			}
-			if err := tx.Commit(ctx); err != nil {
-				return Participant{}, err
-			}
-			_ = s.notify(ctx, ch.CreatedBy, "challenge_joined", map[string]any{
-				"challenge_id": ch.ID.String(),
-				"slug":         ch.Slug,
-				"title":        ch.Title,
-				"user_id":      actor.ID.String(),
-			})
-			return s.getParticipant(ctx, existingID)
 		}
 	} else if !errors.Is(err, pgx.ErrNoRows) {
 		return Participant{}, err
@@ -148,17 +141,62 @@ func (s *Service) Join(ctx context.Context, actor IdentityActor, idOrSlug string
 		return Participant{}, err
 	}
 
-	id := uuid.New()
-	_, err = tx.Exec(ctx, `
-		INSERT INTO challenge_participants (id, challenge_id, user_id, status)
-		VALUES ($1, $2, $3, $4)
-	`, id, ch.ID, actor.ID, PartConfirmed)
-	if err != nil {
-		if strings.Contains(err.Error(), "challenge_participants_challenge_id_user_id_key") {
+	var alreadyPaid bool
+	_ = tx.QueryRow(ctx, `
+		SELECT EXISTS(
+			SELECT 1 FROM challenge_entry_payments
+			WHERE challenge_id = $1 AND user_id = $2 AND status = 'paid'
+		)
+	`, ch.ID, actor.ID).Scan(&alreadyPaid)
+
+	if !alreadyPaid {
+		payload := map[string]string{"method": method}
+		if last4 != "" {
+			payload["last4"] = last4
+		}
+		raw, _ := json.Marshal(payload)
+		paymentID := fmt.Sprintf("entry-%s-%s", method, actor.ID.String())
+		_, err = tx.Exec(ctx, `
+			INSERT INTO challenge_entry_payments (
+				id, challenge_id, user_id, amount_cents, currency, method, status, provider_payment_id, raw_payload
+			) VALUES ($1,$2,$3,$4,'BRL',$5,'paid',$6,$7::jsonb)
+			ON CONFLICT (challenge_id, user_id) DO UPDATE
+			SET status = 'paid', method = EXCLUDED.method, provider_payment_id = EXCLUDED.provider_payment_id,
+			    raw_payload = EXCLUDED.raw_payload, amount_cents = EXCLUDED.amount_cents
+		`, uuid.New(), ch.ID, actor.ID, s.entryFeeCents, method, paymentID, raw)
+		if err != nil {
+			return Participant{}, err
+		}
+	}
+
+	var participantID uuid.UUID
+	if hasRow {
+		participantID = existingID
+		_, err = tx.Exec(ctx, `
+			UPDATE challenge_participants
+			SET status = $2, updated_at = now(), invited_by = NULL
+			WHERE id = $1
+		`, existingID, PartConfirmed)
+	} else {
+		participantID = uuid.New()
+		_, err = tx.Exec(ctx, `
+			INSERT INTO challenge_participants (id, challenge_id, user_id, status)
+			VALUES ($1, $2, $3, $4)
+		`, participantID, ch.ID, actor.ID, PartConfirmed)
+		if err != nil && strings.Contains(err.Error(), "challenge_participants_challenge_id_user_id_key") {
 			return Participant{}, ErrAlreadyParticipant
 		}
+	}
+	if err != nil {
 		return Participant{}, err
 	}
+
+	_, _ = tx.Exec(ctx, `
+		INSERT INTO audit_logs (id, actor_user_id, action, entity_type, entity_id, payload)
+		VALUES ($1,$2,'challenge_pay_join','challenge',$3,
+		        jsonb_build_object('method',$4::text,'amount_cents',$5::int,'user_id',$6::text))
+	`, uuid.New(), actor.ID, ch.ID.String(), method, s.entryFeeCents, actor.ID.String())
+
 	if err := tx.Commit(ctx); err != nil {
 		return Participant{}, err
 	}
@@ -168,7 +206,7 @@ func (s *Service) Join(ctx context.Context, actor IdentityActor, idOrSlug string
 		"title":        ch.Title,
 		"user_id":      actor.ID.String(),
 	})
-	return s.getParticipant(ctx, id)
+	return s.getParticipant(ctx, participantID)
 }
 
 func (s *Service) Invite(ctx context.Context, actor IdentityActor, idOrSlug, username string) (Participant, error) {
@@ -255,32 +293,8 @@ func (s *Service) AcceptInvite(ctx context.Context, actor IdentityActor, partici
 	if ch.Status != StatusPublished {
 		return Participant{}, ErrNotJoinable
 	}
-
-	tx, err := s.db.Begin(ctx)
-	if err != nil {
-		return Participant{}, err
-	}
-	defer tx.Rollback(ctx)
-
-	if err := s.lockAndCheckCapacity(ctx, tx, ch.ID, ch.Capacity); err != nil {
-		return Participant{}, err
-	}
-	_, err = tx.Exec(ctx, `
-		UPDATE challenge_participants SET status = $2, updated_at = now() WHERE id = $1
-	`, participantID, PartConfirmed)
-	if err != nil {
-		return Participant{}, err
-	}
-	if err := tx.Commit(ctx); err != nil {
-		return Participant{}, err
-	}
-	_ = s.notify(ctx, ch.CreatedBy, "invite_accepted", map[string]any{
-		"challenge_id": ch.ID.String(),
-		"slug":         ch.Slug,
-		"title":        ch.Title,
-		"user_id":      actor.ID.String(),
-	})
-	return s.getParticipant(ctx, participantID)
+	// Confirming an invite requires the same entry payment as a public join.
+	return Participant{}, ErrPaymentRequired
 }
 
 func (s *Service) DeclineInvite(ctx context.Context, actor IdentityActor, participantID uuid.UUID) (Participant, error) {

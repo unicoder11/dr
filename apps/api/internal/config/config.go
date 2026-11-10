@@ -26,6 +26,7 @@ type Config struct {
 	ResendAPIKey             string
 	EmailFrom                string
 	ChallengeSubmissionFeeCents int
+	ChallengeEntryFeeCents      int
 }
 
 func Load() (Config, error) {
@@ -48,6 +49,7 @@ func Load() (Config, error) {
 		ResendAPIKey:    os.Getenv("RESEND_API_KEY"),
 		EmailFrom:       getEnv("EMAIL_FROM", "Desafios Reais <noreply@desafiosreais.com>"),
 		ChallengeSubmissionFeeCents: getEnvInt("CHALLENGE_SUBMISSION_FEE_CENTS", 9900),
+		ChallengeEntryFeeCents:      getEnvInt("CHALLENGE_ENTRY_FEE_CENTS", 9900),
 	}
 
 	if cfg.SessionSecret == "" {
