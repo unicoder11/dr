@@ -25,7 +25,9 @@ func NewRouter(cfg config.Config, db *pgxpool.Pool) http.Handler {
 
 	identitySvc := identity.NewService(db)
 	adminSvc := admin.NewService(db)
-	challengeSvc := challenges.NewService(db).WithPublicURL(cfg.PublicURL)
+	challengeSvc := challenges.NewService(db).
+		WithPublicURL(cfg.PublicURL).
+		WithSubmissionFee(cfg.ChallengeSubmissionFeeCents)
 	notifSvc := notifications.NewService(db)
 	opsSvc := ops.NewService(db)
 	communitySvc := community.NewService(db)
@@ -84,6 +86,7 @@ func NewRouter(cfg config.Config, db *pgxpool.Pool) http.Handler {
 	mux.Handle("POST /api/v1/challenges", middleware.RequireAuth(http.HandlerFunc(chH.Create)))
 	mux.Handle("PATCH /api/v1/challenges/{idOrSlug}", middleware.RequireAuth(http.HandlerFunc(chH.Update)))
 	mux.Handle("POST /api/v1/challenges/{idOrSlug}/transition", middleware.RequireAuth(http.HandlerFunc(chH.Transition)))
+	mux.Handle("POST /api/v1/challenges/{idOrSlug}/pay-submit", middleware.RequireAuth(http.HandlerFunc(chH.PayAndSubmit)))
 	mux.Handle("POST /api/v1/challenges/{idOrSlug}/cover", middleware.RequireAuth(http.HandlerFunc(chH.SetCover)))
 	mux.Handle("POST /api/v1/media/upload", middleware.RequireAuth(http.HandlerFunc(mediaH.Upload)))
 	mux.HandleFunc("GET /api/v1/media/{id}", mediaH.GetMeta)

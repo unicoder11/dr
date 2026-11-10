@@ -2,6 +2,7 @@ package challenges
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"regexp"
@@ -16,24 +17,34 @@ import (
 )
 
 var (
-	ErrNotFound       = errors.New("not found")
-	ErrForbidden      = errors.New("forbidden")
-	ErrInvalidInput   = errors.New("invalid input")
-	ErrInvalidStatus  = errors.New("invalid status transition")
+	ErrNotFound         = errors.New("not found")
+	ErrForbidden        = errors.New("forbidden")
+	ErrInvalidInput     = errors.New("invalid input")
+	ErrInvalidStatus    = errors.New("invalid status transition")
 	ErrModalityInactive = errors.New("modality inactive")
+	ErrPaymentRequired  = errors.New("payment_required")
+	ErrAlreadyPaid      = errors.New("already_paid")
 )
 
 type Service struct {
 	db        *pgxpool.Pool
 	publicURL string
+	feeCents  int
 }
 
 func NewService(db *pgxpool.Pool) *Service {
-	return &Service{db: db}
+	return &Service{db: db, feeCents: 9900}
 }
 
 func (s *Service) WithPublicURL(url string) *Service {
 	s.publicURL = strings.TrimRight(url, "/")
+	return s
+}
+
+func (s *Service) WithSubmissionFee(cents int) *Service {
+	if cents >= 0 {
+		s.feeCents = cents
+	}
 	return s
 }
 
@@ -59,10 +70,12 @@ type Challenge struct {
 	EndsAt          *time.Time `json:"ends_at,omitempty"`
 	CoverAssetID    *uuid.UUID `json:"cover_asset_id,omitempty"`
 	CoverURL        string     `json:"cover_url,omitempty"`
-	IsDemo          bool       `json:"is_demo"`
-	Derived         Derived    `json:"derived"`
-	CreatedAt       time.Time  `json:"created_at"`
-	UpdatedAt       time.Time  `json:"updated_at"`
+	IsDemo               bool       `json:"is_demo"`
+	SubmissionFeeCents   int        `json:"submission_fee_cents"`
+	SubmissionPaid       bool       `json:"submission_paid"`
+	Derived              Derived    `json:"derived"`
+	CreatedAt            time.Time  `json:"created_at"`
+	UpdatedAt            time.Time  `json:"updated_at"`
 }
 
 type Derived struct {
@@ -293,6 +306,13 @@ func (s *Service) Transition(ctx context.Context, actor IdentityActor, idOrSlug,
 		if !canEdit(actor, ch) {
 			return Challenge{}, ErrForbidden
 		}
+		paid, err := s.isSubmissionPaid(ctx, ch.ID)
+		if err != nil {
+			return Challenge{}, err
+		}
+		if !paid {
+			return Challenge{}, ErrPaymentRequired
+		}
 	case StatusPublished:
 		// creator with creator/organizer/admin can publish from draft (auto-approve)
 		// pending_approval requires admin/organizer
@@ -303,6 +323,16 @@ func (s *Service) Transition(ctx context.Context, actor IdentityActor, idOrSlug,
 		} else if ch.Status == StatusDraft {
 			if !canPublish(actor, ch) {
 				return Challenge{}, ErrForbidden
+			}
+			// Owner self-publish also requires the submission fee.
+			if ch.CreatedBy == actor.ID && !auth.HasAnyRole(actor.Roles, auth.RoleAdmin, auth.RoleOrganizer) {
+				paid, err := s.isSubmissionPaid(ctx, ch.ID)
+				if err != nil {
+					return Challenge{}, err
+				}
+				if !paid {
+					return Challenge{}, ErrPaymentRequired
+				}
 			}
 		} else {
 			return Challenge{}, ErrForbidden
@@ -331,31 +361,6 @@ func (s *Service) Transition(ctx context.Context, actor IdentityActor, idOrSlug,
 	`, uuid.New(), actor.ID, ch.ID.String(), ch.Status, to)
 
 	return s.Get(ctx, ch.ID.String(), actor)
-}
-
-func (s *Service) Get(ctx context.Context, idOrSlug string, viewer IdentityActor) (Challenge, error) {
-	ch, err := s.scanOne(ctx, `
-		SELECT c.id, c.slug, c.title, c.description, c.modality_id, m.slug, m.name,
-		       c.arena_id, a.slug, a.name, c.created_by, p.username, c.competition_type,
-		       c.status, c.regulation, c.capacity, c.starts_at, c.ends_at, c.cover_asset_id, c.is_demo,
-		       c.created_at, c.updated_at,
-		       COALESCE((
-		         SELECT COUNT(*) FROM challenge_participants cp
-		         WHERE cp.challenge_id = c.id AND cp.status IN ('confirmed','checked_in')
-		       ), 0)
-		FROM challenges c
-		JOIN modalities m ON m.id = c.modality_id
-		JOIN arenas a ON a.id = c.arena_id
-		JOIN profiles p ON p.user_id = c.created_by
-		WHERE c.id::text = $1 OR c.slug = $1
-	`, idOrSlug)
-	if err != nil {
-		return Challenge{}, err
-	}
-	if !canView(viewer, ch) {
-		return Challenge{}, ErrNotFound
-	}
-	return ch, nil
 }
 
 func (s *Service) List(ctx context.Context, viewer IdentityActor, f ListFilter) ([]Challenge, error) {
@@ -497,10 +502,133 @@ func (s *Service) scanChallenge(row scannable) (Challenge, error) {
 	if err != nil {
 		return Challenge{}, err
 	}
+	ch.SubmissionFeeCents = s.feeCents
 	if ch.CoverAssetID != nil && s.publicURL != "" {
 		ch.CoverURL = s.publicURL + "/media/" + ch.CoverAssetID.String()
 	}
 	return ch, nil
+}
+
+func (s *Service) isSubmissionPaid(ctx context.Context, challengeID uuid.UUID) (bool, error) {
+	var paid bool
+	err := s.db.QueryRow(ctx, `
+		SELECT EXISTS(
+			SELECT 1 FROM challenge_submission_payments
+			WHERE challenge_id = $1 AND status = 'paid'
+		)
+	`, challengeID).Scan(&paid)
+	return paid, err
+}
+
+func (s *Service) enrichPayment(ctx context.Context, ch *Challenge) {
+	ch.SubmissionFeeCents = s.feeCents
+	paid, err := s.isSubmissionPaid(ctx, ch.ID)
+	if err == nil {
+		ch.SubmissionPaid = paid
+	}
+}
+
+func (s *Service) Get(ctx context.Context, idOrSlug string, viewer IdentityActor) (Challenge, error) {
+	ch, err := s.scanOne(ctx, `
+		SELECT c.id, c.slug, c.title, c.description, c.modality_id, m.slug, m.name,
+		       c.arena_id, a.slug, a.name, c.created_by, p.username, c.competition_type,
+		       c.status, c.regulation, c.capacity, c.starts_at, c.ends_at, c.cover_asset_id, c.is_demo,
+		       c.created_at, c.updated_at,
+		       COALESCE((
+		         SELECT COUNT(*) FROM challenge_participants cp
+		         WHERE cp.challenge_id = c.id AND cp.status IN ('confirmed','checked_in')
+		       ), 0)
+		FROM challenges c
+		JOIN modalities m ON m.id = c.modality_id
+		JOIN arenas a ON a.id = c.arena_id
+		JOIN profiles p ON p.user_id = c.created_by
+		WHERE c.id::text = $1 OR c.slug = $1
+	`, idOrSlug)
+	if err != nil {
+		return Challenge{}, err
+	}
+	if !canView(viewer, ch) {
+		return Challenge{}, ErrNotFound
+	}
+	s.enrichPayment(ctx, &ch)
+	return ch, nil
+}
+
+// PayAndSubmit records the submission fee and moves draft → pending_approval.
+func (s *Service) PayAndSubmit(ctx context.Context, actor IdentityActor, idOrSlug, method, last4 string) (Challenge, error) {
+	if method != "pix" && method != "card" {
+		return Challenge{}, ErrInvalidInput
+	}
+	ch, err := s.Get(ctx, idOrSlug, actor)
+	if err != nil {
+		return Challenge{}, err
+	}
+	if !canEdit(actor, ch) {
+		return Challenge{}, ErrForbidden
+	}
+	if ch.Status != StatusDraft {
+		if ch.Status == StatusPendingApproval && ch.SubmissionPaid {
+			return ch, nil
+		}
+		return Challenge{}, ErrInvalidStatus
+	}
+
+	tx, err := s.db.Begin(ctx)
+	if err != nil {
+		return Challenge{}, err
+	}
+	defer tx.Rollback(ctx)
+
+	var status string
+	err = tx.QueryRow(ctx, `SELECT status FROM challenges WHERE id = $1 FOR UPDATE`, ch.ID).Scan(&status)
+	if err != nil {
+		return Challenge{}, err
+	}
+	if status != StatusDraft {
+		return Challenge{}, ErrInvalidStatus
+	}
+
+	var alreadyPaid bool
+	_ = tx.QueryRow(ctx, `
+		SELECT EXISTS(
+			SELECT 1 FROM challenge_submission_payments
+			WHERE challenge_id = $1 AND status = 'paid'
+		)
+	`, ch.ID).Scan(&alreadyPaid)
+
+	if !alreadyPaid {
+		payload := map[string]string{"method": method}
+		if last4 != "" {
+			payload["last4"] = last4
+		}
+		raw, _ := json.Marshal(payload)
+		paymentID := fmt.Sprintf("%s-%s", method, ch.ID.String())
+		_, err = tx.Exec(ctx, `
+			INSERT INTO challenge_submission_payments (
+				id, challenge_id, user_id, amount_cents, currency, method, status, provider_payment_id, raw_payload
+			) VALUES ($1,$2,$3,$4,'BRL',$5,'paid',$6,$7::jsonb)
+		`, uuid.New(), ch.ID, actor.ID, s.feeCents, method, paymentID, raw)
+		if err != nil {
+			return Challenge{}, err
+		}
+	}
+
+	_, err = tx.Exec(ctx, `
+		UPDATE challenges SET status = $2, updated_at = now() WHERE id = $1
+	`, ch.ID, StatusPendingApproval)
+	if err != nil {
+		return Challenge{}, err
+	}
+	_, _ = tx.Exec(ctx, `
+		INSERT INTO audit_logs (id, actor_user_id, action, entity_type, entity_id, payload)
+		VALUES ($1,$2,'challenge_pay_submit','challenge',$3,
+		        jsonb_build_object('method',$4::text,'amount_cents',$5::int,'to','pending_approval'))
+	`, uuid.New(), actor.ID, ch.ID.String(), method, s.feeCents)
+
+	if err := tx.Commit(ctx); err != nil {
+		return Challenge{}, err
+	}
+	return s.Get(ctx, ch.ID.String(), actor)
 }
 
 var nonSlug = regexp.MustCompile(`[^a-z0-9]+`)

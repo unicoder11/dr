@@ -245,12 +245,22 @@ export default function ChallengePublicPage() {
             Participar
           </Button>
         )}
-        {canSubmit && (
+        {canSubmit && !challenge.submission_paid && (
+          <Button href={`/desafios/${challenge.slug}/pagar`}>
+            {`Pagar e enviar · ${((challenge.submission_fee_cents ?? 9900) / 100).toLocaleString("pt-BR", { style: "currency", currency: "BRL" })}`}
+          </Button>
+        )}
+        {canSubmit && challenge.submission_paid && (
           <Button disabled={busy} onClick={() => transition("pending_approval")}>
             Enviar para aprovação
           </Button>
         )}
-        {canPublish && (
+        {canPublish && !challenge.submission_paid && (
+          <Button href={`/desafios/${challenge.slug}/pagar`}>
+            Pagar taxa para publicar
+          </Button>
+        )}
+        {canPublish && challenge.submission_paid && (
           <Button disabled={busy} onClick={() => transition("published")}>
             Publicar
           </Button>

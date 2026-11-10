@@ -23,8 +23,9 @@ type Config struct {
 	MPAccessToken   string
 	MPWebhookSecret string
 	MediaDir        string
-	ResendAPIKey    string
-	EmailFrom       string
+	ResendAPIKey             string
+	EmailFrom                string
+	ChallengeSubmissionFeeCents int
 }
 
 func Load() (Config, error) {
@@ -46,6 +47,7 @@ func Load() (Config, error) {
 		MediaDir:        getEnv("MEDIA_DIR", "data/uploads"),
 		ResendAPIKey:    os.Getenv("RESEND_API_KEY"),
 		EmailFrom:       getEnv("EMAIL_FROM", "Desafios Reais <noreply@desafiosreais.com>"),
+		ChallengeSubmissionFeeCents: getEnvInt("CHALLENGE_SUBMISSION_FEE_CENTS", 9900),
 	}
 
 	if cfg.SessionSecret == "" {
@@ -75,6 +77,18 @@ func getEnvBool(key string, fallback bool) bool {
 		return fallback
 	}
 	return b
+}
+
+func getEnvInt(key string, fallback int) int {
+	v := os.Getenv(key)
+	if v == "" {
+		return fallback
+	}
+	n, err := strconv.Atoi(v)
+	if err != nil {
+		return fallback
+	}
+	return n
 }
 
 func splitCSV(s string) []string {

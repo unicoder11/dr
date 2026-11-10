@@ -64,7 +64,7 @@ const STEPS = [
     id: "go",
     kicker: "Checkered",
     title: "Tudo certo?",
-    hint: "Salvamos como rascunho. Depois você publica ou manda pra aprovação.",
+    hint: "Salvamos como rascunho. Para enviar à aprovação, você paga a taxa do desafio na próxima etapa.",
   },
 ] as const;
 

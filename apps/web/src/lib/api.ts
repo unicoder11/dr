@@ -53,6 +53,8 @@ export type Challenge = {
   cover_asset_id?: string | null;
   cover_url?: string;
   is_demo: boolean;
+  submission_fee_cents?: number;
+  submission_paid?: boolean;
   derived: {
     scheduled: boolean;
     open: boolean;
@@ -244,6 +246,14 @@ export const api = {
     request<Challenge>(`/api/v1/challenges/${idOrSlug}/transition`, {
       method: "POST",
       body: JSON.stringify({ status }),
+    }),
+  paySubmitChallenge: (
+    idOrSlug: string,
+    body: { method: "pix" | "card"; holder?: string; number?: string; expiry?: string; cvv?: string },
+  ) =>
+    request<Challenge>(`/api/v1/challenges/${idOrSlug}/pay-submit`, {
+      method: "POST",
+      body: JSON.stringify(body),
     }),
   setChallengeCover: (idOrSlug: string, asset_id: string) =>
     request<Challenge>(`/api/v1/challenges/${idOrSlug}/cover`, {

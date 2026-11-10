@@ -4,6 +4,7 @@ cd /opt/dr
 find bin migrations -name '._*' -delete
 chmod 755 bin/api bin/migrate
 docker compose build dr-api
+# Container entrypoint runs /app/migrate then the API.
 docker compose up -d --no-deps --force-recreate dr-api
 
 ok=0

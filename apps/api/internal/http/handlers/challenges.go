@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"errors"
 	"net/http"
+	"strings"
 	"time"
 
 	"github.com/desafiosreais/dr/apps/api/internal/http/middleware"
@@ -203,6 +204,55 @@ func (h ChallengesHandler) Transition(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, http.StatusOK, ch)
 }
 
+type paySubmitBody struct {
+	Method string `json:"method"`
+	Holder string `json:"holder"`
+	Number string `json:"number"`
+	Expiry string `json:"expiry"`
+	CVV    string `json:"cvv"`
+}
+
+func (h ChallengesHandler) PayAndSubmit(w http.ResponseWriter, r *http.Request) {
+	u, ok := middleware.UserFromContext(r.Context())
+	if !ok {
+		writeJSON(w, http.StatusUnauthorized, map[string]string{"error": "unauthorized"})
+		return
+	}
+	var body paySubmitBody
+	if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
+		writeJSON(w, http.StatusBadRequest, map[string]string{"error": "invalid_json"})
+		return
+	}
+	method := strings.ToLower(strings.TrimSpace(body.Method))
+	last4 := ""
+	if method == "card" {
+		digits := onlyDigits(body.Number)
+		if len(digits) < 13 || len(body.CVV) < 3 || strings.TrimSpace(body.Holder) == "" || strings.TrimSpace(body.Expiry) == "" {
+			writeJSON(w, http.StatusBadRequest, map[string]string{"error": "invalid_card"})
+			return
+		}
+		if len(digits) >= 4 {
+			last4 = digits[len(digits)-4:]
+		}
+	}
+	ch, err := h.Svc.PayAndSubmit(r.Context(), challenges.Actor(u.ID, u.Roles), r.PathValue("idOrSlug"), method, last4)
+	if err != nil {
+		mapChallengeErr(w, err)
+		return
+	}
+	writeJSON(w, http.StatusOK, ch)
+}
+
+func onlyDigits(s string) string {
+	var b strings.Builder
+	for _, r := range s {
+		if r >= '0' && r <= '9' {
+			b.WriteRune(r)
+		}
+	}
+	return b.String()
+}
+
 func mapChallengeErr(w http.ResponseWriter, err error) {
 	switch {
 	case errors.Is(err, challenges.ErrNotFound):
@@ -211,6 +261,10 @@ func mapChallengeErr(w http.ResponseWriter, err error) {
 		writeJSON(w, http.StatusForbidden, map[string]string{"error": "forbidden"})
 	case errors.Is(err, challenges.ErrInvalidStatus):
 		writeJSON(w, http.StatusConflict, map[string]string{"error": "invalid_transition"})
+	case errors.Is(err, challenges.ErrPaymentRequired):
+		writeJSON(w, http.StatusPaymentRequired, map[string]string{"error": "payment_required"})
+	case errors.Is(err, challenges.ErrAlreadyPaid):
+		writeJSON(w, http.StatusConflict, map[string]string{"error": "already_paid"})
 	case errors.Is(err, challenges.ErrModalityInactive):
 		writeJSON(w, http.StatusBadRequest, map[string]string{"error": "modality_inactive"})
 	case errors.Is(err, challenges.ErrInvalidInput):
