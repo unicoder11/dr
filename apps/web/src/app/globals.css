@@ -1,0 +1,51 @@
+@import "../../../../packages/design-tokens/tokens.css";
+
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+:root {
+  --background: var(--color-racing-black);
+  --foreground: var(--color-white);
+}
+
+html,
+body {
+  min-height: 100%;
+}
+
+body {
+  background: var(--background);
+  color: var(--foreground);
+  font-family: var(--font-body);
+}
+
+.font-display {
+  font-family: var(--font-display);
+  letter-spacing: 0.04em;
+}
+
+.hero-surface {
+  background:
+    radial-gradient(ellipse 80% 60% at 70% 20%, rgba(183, 255, 0, 0.12), transparent 55%),
+    linear-gradient(160deg, #0c141c 0%, #080d11 45%, #121820 100%);
+}
+
+@keyframes hero-reveal {
+  from {
+    opacity: 0;
+    transform: translateY(12px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+.animate-hero {
+  animation: hero-reveal 0.8s ease-out both;
+}
+
+.animate-hero-delay {
+  animation: hero-reveal 0.8s ease-out 0.15s both;
+}

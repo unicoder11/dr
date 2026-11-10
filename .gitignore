@@ -1,0 +1,38 @@
+# env / secrets
+.env
+.env.local
+.env.*.local
+!.env.example
+
+# deps
+node_modules/
+apps/web/node_modules/
+packages/*/node_modules/
+
+# builds
+apps/web/.next/
+apps/web/out/
+dist/
+build/
+coverage/
+
+# go
+apps/api/bin/
+*.exe
+*.test
+*.out
+
+# os / ide
+.DS_Store
+.idea/
+.vscode/
+*.swp
+
+# logs
+*.log
+npm-debug.log*
+
+# docker volumes
+data/
+postgres-data/
+redis-data/
