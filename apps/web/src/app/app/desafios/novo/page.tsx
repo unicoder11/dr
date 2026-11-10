@@ -58,7 +58,7 @@ const STEPS = [
     id: "extra",
     kicker: "Extra",
     title: "Capa e regras",
-    hint: "Opcional — dá cara pro desafio e deixa o regulamento claro.",
+    hint: "Escolhe um template rápido ou envia tua foto. Regulamento é opcional.",
   },
   {
     id: "go",
@@ -68,10 +68,28 @@ const STEPS = [
   },
 ] as const;
 
+const COVER_TEMPLATES = [
+  { id: "kart", src: brand.images.kart, label: "Kart racing" },
+  { id: "gravity", src: brand.images.gravity, label: "Gravity kart" },
+  { id: "challenge", src: brand.images.challenge, label: "O desafio" },
+  { id: "winners", src: brand.images.winners, label: "Vencedores" },
+  { id: "sunset", src: brand.images.sunset, label: "Complexo sunset" },
+  { id: "clubhouse", src: brand.images.clubhouse, label: "Clubhouse" },
+] as const;
+
 const ease = [0.22, 1, 0.36, 1] as const;
 
 function defaultStartsAt() {
   return new Date(Date.now() + 3 * 24 * 60 * 60 * 1000).toISOString().slice(0, 16);
+}
+
+async function fileFromTemplate(src: string, name: string): Promise<File> {
+  const res = await fetch(src);
+  if (!res.ok) throw new Error("template_fetch_failed");
+  const blob = await res.blob();
+  const type = blob.type || "image/png";
+  const ext = type.includes("jpeg") || type.includes("jpg") ? "jpg" : "png";
+  return new File([blob], `${name}.${ext}`, { type });
 }
 
 export default function NovoDesafioPage() {
@@ -90,6 +108,7 @@ export default function NovoDesafioPage() {
   const [loading, setLoading] = useState(false);
   const [done, setDone] = useState(false);
   const [coverFile, setCoverFile] = useState<File | null>(null);
+  const [coverTemplate, setCoverTemplate] = useState<string | null>(COVER_TEMPLATES[0].src);
   const [coverPreview, setCoverPreview] = useState<string | null>(null);
 
   const [form, setForm] = useState<FormState>({
@@ -124,14 +143,21 @@ export default function NovoDesafioPage() {
   }, [authLoading, user, router]);
 
   useEffect(() => {
-    if (!coverFile) {
-      setCoverPreview(null);
-      return;
+    if (coverFile) {
+      const url = URL.createObjectURL(coverFile);
+      setCoverPreview(url);
+      return () => URL.revokeObjectURL(url);
     }
-    const url = URL.createObjectURL(coverFile);
-    setCoverPreview(url);
-    return () => URL.revokeObjectURL(url);
-  }, [coverFile]);
+    setCoverPreview(coverTemplate);
+  }, [coverFile, coverTemplate]);
+
+  const coverLabel = useMemo(() => {
+    if (coverFile) return coverFile.name;
+    if (coverTemplate) {
+      return COVER_TEMPLATES.find((t) => t.src === coverTemplate)?.label || "Template";
+    }
+    return "Sem capa";
+  }, [coverFile, coverTemplate]);
 
   const progress = ((step + 1) / STEPS.length) * 100;
   const meta = STEPS[step];
@@ -184,6 +210,9 @@ export default function NovoDesafioPage() {
     if (i === 4 && coverFile && coverFile.size > 5 * 1024 * 1024) {
       return "Capa até 5MB.";
     }
+    if (i === 4 && !coverFile && !coverTemplate) {
+      return "Escolhe um template ou envia uma foto.";
+    }
     return null;
   }
 
@@ -222,8 +251,16 @@ export default function NovoDesafioPage() {
         capacity: form.capacity,
         starts_at: new Date(form.starts_at).toISOString(),
       });
-      if (coverFile) {
-        const asset = await api.uploadMedia(coverFile, "cover", ch.title);
+      const upload =
+        coverFile ||
+        (coverTemplate
+          ? await fileFromTemplate(
+              coverTemplate,
+              COVER_TEMPLATES.find((t) => t.src === coverTemplate)?.id || "cover",
+            )
+          : null);
+      if (upload) {
+        const asset = await api.uploadMedia(upload, "cover", ch.title);
         ch = await api.setChallengeCover(ch.slug, asset.id);
       }
       setDone(true);
@@ -490,23 +527,75 @@ export default function NovoDesafioPage() {
 
                   {step === 4 && (
                     <>
+                      <p className="text-xs uppercase tracking-wide text-silver">
+                        Escolhe um template
+                      </p>
+                      <div className="grid grid-cols-2 gap-2 sm:grid-cols-3">
+                        {COVER_TEMPLATES.map((t) => {
+                          const on = !coverFile && coverTemplate === t.src;
+                          return (
+                            <button
+                              key={t.id}
+                              type="button"
+                              onClick={() => {
+                                setCoverFile(null);
+                                setCoverTemplate(t.src);
+                              }}
+                              className={`group relative overflow-hidden rounded-2xl border text-left transition ${
+                                on
+                                  ? "border-lime shadow-[0_0_0_1px_rgba(199,240,0,0.5)]"
+                                  : "border-white/15 hover:border-white/35"
+                              }`}
+                            >
+                              {/* eslint-disable-next-line @next/next/no-img-element */}
+                              <img
+                                src={t.src}
+                                alt={t.label}
+                                className="aspect-[4/3] w-full object-cover"
+                              />
+                              <span className="absolute inset-x-0 bottom-0 bg-gradient-to-t from-racing/90 to-transparent px-2 pb-2 pt-6 text-[10px] font-semibold uppercase tracking-wide text-white">
+                                {t.label}
+                              </span>
+                              {on && (
+                                <span className="absolute right-2 top-2 rounded-full bg-lime px-2 py-0.5 text-[10px] font-bold text-racing">
+                                  OK
+                                </span>
+                              )}
+                            </button>
+                          );
+                        })}
+                      </div>
+
+                      <div className="relative py-1 text-center text-[10px] uppercase tracking-[0.25em] text-silver">
+                        <span className="bg-transparent px-2">ou envia a tua</span>
+                      </div>
+
                       <label className="block text-sm text-silver">
-                        Capa (jpg/png/webp, máx. 5MB)
+                        Upload (jpg/png/webp, máx. 5MB)
                         <input
                           type="file"
                           accept="image/jpeg,image/png,image/webp,image/gif"
-                          onChange={(e) => setCoverFile(e.target.files?.[0] || null)}
+                          onChange={(e) => {
+                            const file = e.target.files?.[0] || null;
+                            setCoverFile(file);
+                            if (file) setCoverTemplate(null);
+                          }}
                           className="mt-2 block w-full text-sm text-silver file:mr-3 file:rounded-full file:border-0 file:bg-lime file:px-4 file:py-2 file:font-semibold file:text-racing"
                         />
                       </label>
+
                       {coverPreview && (
-                        // eslint-disable-next-line @next/next/no-img-element
-                        <img
-                          src={coverPreview}
-                          alt="Prévia da capa"
-                          className="mt-2 h-36 w-full rounded-2xl object-cover"
-                        />
+                        <div>
+                          <p className="mb-1.5 text-xs text-silver">Prévia</p>
+                          {/* eslint-disable-next-line @next/next/no-img-element */}
+                          <img
+                            src={coverPreview}
+                            alt="Prévia da capa"
+                            className="h-36 w-full rounded-2xl object-cover"
+                          />
+                        </div>
                       )}
+
                       <label className="block text-sm text-silver">
                         Regulamento (opcional)
                         <textarea
@@ -530,7 +619,7 @@ export default function NovoDesafioPage() {
                         label="Quando"
                         value={new Date(form.starts_at).toLocaleString("pt-BR")}
                       />
-                      <ReviewRow label="Capa" value={coverFile ? coverFile.name : "Sem capa"} />
+                      <ReviewRow label="Capa" value={coverLabel} />
                     </div>
                   )}
                 </div>
