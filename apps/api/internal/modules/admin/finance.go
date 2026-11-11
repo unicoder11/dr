@@ -11,18 +11,23 @@ import (
 )
 
 type FinanceOverview struct {
-	PaidCents       int            `json:"paid_cents"`
-	PaidCount       int            `json:"paid_count"`
-	PendingCents    int            `json:"pending_cents"`
-	PendingCount    int            `json:"pending_count"`
-	RefundedCents   int            `json:"refunded_cents"`
-	RefundedCount   int            `json:"refunded_count"`
-	FailedCount     int            `json:"failed_count"`
-	Last7dPaidCents int            `json:"last_7d_paid_cents"`
-	ByKind          map[string]int `json:"by_kind_paid_cents"`
-	ByMethod        map[string]int `json:"by_method_paid_cents"`
-	SubmissionFee   int            `json:"submission_fee_cents,omitempty"`
-	EntryFee        int            `json:"entry_fee_cents,omitempty"`
+	PaidCents          int            `json:"paid_cents"`
+	PaidCount          int            `json:"paid_count"`
+	PendingCents       int            `json:"pending_cents"`
+	PendingCount       int            `json:"pending_count"`
+	RefundedCents      int            `json:"refunded_cents"`
+	RefundedCount      int            `json:"refunded_count"`
+	FailedCount        int            `json:"failed_count"`
+	Last7dPaidCents    int            `json:"last_7d_paid_cents"`
+	ByKind             map[string]int `json:"by_kind_paid_cents"`
+	ByMethod           map[string]int `json:"by_method_paid_cents"`
+	SubmissionFee      int            `json:"submission_fee_cents,omitempty"`
+	EntryFee           int            `json:"entry_fee_cents,omitempty"`
+	PlatformFeeBPS     int            `json:"platform_fee_bps"`
+	PlatformFeesCents  int            `json:"platform_fees_cents"`
+	WinnerPayoutsCents int            `json:"winner_payouts_cents"`
+	SettlementsCount   int            `json:"settlements_count"`
+	OpenPotsCents      int            `json:"open_pots_cents"`
 }
 
 type PaymentRow struct {
@@ -188,6 +193,34 @@ func (s *Service) FinanceOverview(ctx context.Context, actorRoles []string) (Fin
 		) t
 		WHERE created_at >= now() - interval '7 days'
 	`).Scan(&o.Last7dPaidCents)
+
+	o.PlatformFeeBPS, _ = s.GetSettingInt(ctx, SettingPotFeeBPS, DefaultPotFeeBPS)
+	_ = s.db.QueryRow(ctx, `
+		SELECT COALESCE(SUM(platform_fee_cents),0)::int,
+		       COALESCE(SUM(winner_payout_cents),0)::int,
+		       COUNT(*)::int
+		FROM challenge_settlements
+		WHERE status = 'released'
+	`).Scan(&o.PlatformFeesCents, &o.WinnerPayoutsCents, &o.SettlementsCount)
+
+	// Paid stakes still held in open (not settled) challenges.
+	_ = s.db.QueryRow(ctx, `
+		SELECT COALESCE(SUM(x.amount_cents),0)::int FROM (
+			SELECT sp.amount_cents, sp.challenge_id
+			FROM challenge_submission_payments sp
+			WHERE sp.status = 'paid'
+			UNION ALL
+			SELECT ep.amount_cents, ep.challenge_id
+			FROM challenge_entry_payments ep
+			WHERE ep.status = 'paid'
+		) x
+		JOIN challenges c ON c.id = x.challenge_id
+		WHERE c.status IN ('published','in_progress','pending_approval','draft')
+		  AND NOT EXISTS (
+		    SELECT 1 FROM challenge_settlements cs
+		    WHERE cs.challenge_id = c.id AND cs.status = 'released'
+		  )
+	`).Scan(&o.OpenPotsCents)
 
 	return o, nil
 }

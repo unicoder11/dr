@@ -53,10 +53,20 @@ export type Challenge = {
   cover_asset_id?: string | null;
   cover_url?: string;
   is_demo: boolean;
+  stake_cents?: number;
+  raises_allowed?: boolean;
   submission_fee_cents?: number;
   submission_paid?: boolean;
+  creator_topup_due_cents?: number;
   entry_fee_cents?: number;
   entry_paid_by_me?: boolean;
+  pending_raise?: StakeRaise | null;
+  pot_cents?: number;
+  platform_fee_bps?: number;
+  settled?: boolean;
+  winner_payout_cents?: number;
+  platform_fee_cents?: number;
+  winner_username?: string;
   derived: {
     scheduled: boolean;
     open: boolean;
@@ -64,6 +74,19 @@ export type Challenge = {
   };
   created_at: string;
   updated_at: string;
+};
+
+export type StakeRaise = {
+  id: string;
+  challenge_id: string;
+  proposed_by: string;
+  proposer_username?: string;
+  from_stake_cents: number;
+  to_stake_cents: number;
+  status: string;
+  resolved_by?: string;
+  created_at: string;
+  resolved_at?: string | null;
 };
 
 export type MediaAsset = {
@@ -107,6 +130,8 @@ export type ChallengeInput = {
   capacity: number;
   starts_at: string;
   ends_at?: string | null;
+  stake_cents: number;
+  raises_allowed?: boolean;
 };
 
 export type Participant = {
@@ -232,6 +257,24 @@ export const api = {
       method: "PATCH",
       body: JSON.stringify({ status }),
     }),
+  adminSettlements: () =>
+    request<AdminSettlement[]>("/api/v1/admin/finance/settlements"),
+  adminSettings: () => request<AdminSetting[]>("/api/v1/admin/settings"),
+  adminSetSetting: (key: string, value_int: number) =>
+    request<AdminSetting>(`/api/v1/admin/settings/${encodeURIComponent(key)}`, {
+      method: "PATCH",
+      body: JSON.stringify({ value_int }),
+    }),
+  adminPotPreview: (idOrSlug: string) =>
+    request<AdminPotPreview>(`/api/v1/admin/challenges/${idOrSlug}/pot`),
+  adminSettleChallenge: (
+    idOrSlug: string,
+    body: { winner_user_id: string; notes?: string },
+  ) =>
+    request<AdminSettlement>(`/api/v1/admin/challenges/${idOrSlug}/settle`, {
+      method: "POST",
+      body: JSON.stringify(body),
+    }),
   adminCreateArena: (body: {
     name: string;
     slug: string;
@@ -315,6 +358,29 @@ export const api = {
     request<Participant>(`/api/v1/challenges/${idOrSlug}/pay-join`, {
       method: "POST",
       body: JSON.stringify(body),
+    }),
+  payStakeTopUp: (
+    idOrSlug: string,
+    body: { method: "pix" | "card"; holder?: string; number?: string; expiry?: string; cvv?: string },
+  ) =>
+    request<Challenge>(`/api/v1/challenges/${idOrSlug}/pay-topup`, {
+      method: "POST",
+      body: JSON.stringify(body),
+    }),
+  listRaises: (idOrSlug: string) =>
+    request<StakeRaise[]>(`/api/v1/challenges/${idOrSlug}/raises`),
+  proposeRaise: (idOrSlug: string, stake_cents: number) =>
+    request<StakeRaise>(`/api/v1/challenges/${idOrSlug}/raises`, {
+      method: "POST",
+      body: JSON.stringify({ stake_cents }),
+    }),
+  acceptRaise: (idOrSlug: string, raiseID: string) =>
+    request<StakeRaise>(`/api/v1/challenges/${idOrSlug}/raises/${raiseID}/accept`, {
+      method: "POST",
+    }),
+  refuseRaise: (idOrSlug: string, raiseID: string) =>
+    request<StakeRaise>(`/api/v1/challenges/${idOrSlug}/raises/${raiseID}/refuse`, {
+      method: "POST",
     }),
   invite: (idOrSlug: string, username: string) =>
     request<Participant>(`/api/v1/challenges/${idOrSlug}/invites`, {
@@ -570,6 +636,7 @@ export type AdminChallenge = {
   creator_username: string;
   starts_at: string;
   created_at: string;
+  created_by?: string;
 };
 
 export type AdminFlag = {
@@ -600,6 +667,51 @@ export type AdminFinanceOverview = {
   last_7d_paid_cents: number;
   by_kind_paid_cents: Record<string, number>;
   by_method_paid_cents: Record<string, number>;
+  platform_fee_bps?: number;
+  platform_fees_cents?: number;
+  winner_payouts_cents?: number;
+  settlements_count?: number;
+  open_pots_cents?: number;
+};
+
+export type AdminSetting = {
+  key: string;
+  value_int?: number | null;
+  value_text?: string | null;
+  updated_at: string;
+};
+
+export type AdminPotPreview = {
+  challenge_id: string;
+  slug: string;
+  title: string;
+  status: string;
+  stake_cents: number;
+  creator_paid_cents: number;
+  entries_paid_cents: number;
+  pot_cents: number;
+  platform_fee_bps: number;
+  platform_fee_cents: number;
+  winner_payout_cents: number;
+  already_settled: boolean;
+  settlement_id?: string;
+};
+
+export type AdminSettlement = {
+  id: string;
+  challenge_id: string;
+  challenge_slug: string;
+  challenge_title: string;
+  winner_user_id: string;
+  winner_username: string;
+  pot_cents: number;
+  platform_fee_bps: number;
+  platform_fee_cents: number;
+  winner_payout_cents: number;
+  status: string;
+  released_by?: string;
+  notes?: string;
+  created_at: string;
 };
 
 export type AdminPayment = {

@@ -19,7 +19,23 @@ type FormState = {
   capacity: number;
   starts_at: string;
   regulation: string;
+  stake_reais: string;
+  raises_allowed: boolean;
 };
+
+function formatBRL(cents: number) {
+  return (cents / 100).toLocaleString("pt-BR", {
+    style: "currency",
+    currency: "BRL",
+  });
+}
+
+function stakeReaisToCents(value: string): number | null {
+  const normalized = value.replace(",", ".").trim();
+  const n = Number(normalized);
+  if (!Number.isFinite(n) || n <= 0) return null;
+  return Math.round(n * 100);
+}
 
 const TYPES = [
   { value: "open", label: "Aberto", hint: "Qualquer um pode entrar" },
@@ -49,6 +65,12 @@ const STEPS = [
     hint: "Tipo de confronto e quantas vagas no grid.",
   },
   {
+    id: "aposta",
+    kicker: "Valor",
+    title: "Quanto vale o desafio?",
+    hint: "Você paga esse valor para finalizar a criação. Retadores pagam o mesmo para te desafiar.",
+  },
+  {
     id: "quando",
     kicker: "Agenda",
     title: "Quando largam?",
@@ -64,7 +86,7 @@ const STEPS = [
     id: "go",
     kicker: "Checkered",
     title: "Tudo certo?",
-    hint: "Salvamos como rascunho. Para enviar à aprovação, você paga a taxa do desafio na próxima etapa.",
+    hint: "Salvamos como rascunho. Na próxima etapa você paga o valor do desafio para enviar à aprovação.",
   },
 ] as const;
 
@@ -120,6 +142,8 @@ export default function NovoDesafioPage() {
     capacity: 8,
     starts_at: defaultStartsAt(),
     regulation: "",
+    stake_reais: "99",
+    raises_allowed: false,
   });
 
   useEffect(() => {
@@ -200,6 +224,12 @@ export default function NovoDesafioPage() {
       if (form.capacity > 64) return "Capacidade máxima: 64.";
     }
     if (i === 3) {
+      const cents = stakeReaisToCents(form.stake_reais);
+      if (cents == null) return "Informe o valor do desafio.";
+      if (cents < 1000) return "Valor mínimo: R$ 10,00.";
+      if (cents > 1_000_000) return "Valor máximo: R$ 10.000,00.";
+    }
+    if (i === 4) {
       if (!form.starts_at) return "Define data e horário.";
       const when = new Date(form.starts_at);
       if (Number.isNaN(when.getTime())) return "Data inválida.";
@@ -207,10 +237,10 @@ export default function NovoDesafioPage() {
         return "Agenda pelo menos 1 hora no futuro.";
       }
     }
-    if (i === 4 && coverFile && coverFile.size > 5 * 1024 * 1024) {
+    if (i === 5 && coverFile && coverFile.size > 5 * 1024 * 1024) {
       return "Capa até 5MB.";
     }
-    if (i === 4 && !coverFile && !coverTemplate) {
+    if (i === 5 && !coverFile && !coverTemplate) {
       return "Escolhe um template ou envia uma foto.";
     }
     return null;
@@ -230,13 +260,19 @@ export default function NovoDesafioPage() {
   }
 
   async function submit() {
-    for (let i = 0; i <= 3; i++) {
+    for (let i = 0; i <= 4; i++) {
       const err = validateStep(i);
       if (err) {
         setError(err);
         go(i);
         return;
       }
+    }
+    const stakeCents = stakeReaisToCents(form.stake_reais);
+    if (stakeCents == null) {
+      setError("Informe o valor do desafio.");
+      go(3);
+      return;
     }
     setError(null);
     setLoading(true);
@@ -250,6 +286,8 @@ export default function NovoDesafioPage() {
         regulation: form.regulation.trim(),
         capacity: form.capacity,
         starts_at: new Date(form.starts_at).toISOString(),
+        stake_cents: stakeCents,
+        raises_allowed: form.raises_allowed,
       });
       const upload =
         coverFile ||
@@ -516,6 +554,54 @@ export default function NovoDesafioPage() {
                   )}
 
                   {step === 3 && (
+                    <>
+                      <label className="block text-sm text-silver">
+                        Valor do desafio (R$)
+                        <input
+                          autoFocus
+                          type="text"
+                          inputMode="decimal"
+                          value={form.stake_reais}
+                          placeholder="99,00"
+                          onChange={(e) =>
+                            setForm((f) => ({
+                              ...f,
+                              stake_reais: e.target.value.replace(/[^\d.,]/g, ""),
+                            }))
+                          }
+                          className="mt-1.5 w-full rounded-2xl border border-white/15 bg-black/35 px-4 py-3.5 text-base text-white outline-none transition focus:border-lime focus:shadow-[0_0_0_3px_rgba(199,240,0,0.15)] sm:text-sm"
+                        />
+                      </label>
+                      <p className="text-sm text-silver">
+                        Você paga{" "}
+                        <span className="text-lime">
+                          {formatBRL(stakeReaisToCents(form.stake_reais) ?? 0)}
+                        </span>{" "}
+                        para finalizar. Retadores pagam o mesmo valor para entrar.
+                      </p>
+                      <button
+                        type="button"
+                        onClick={() =>
+                          setForm((f) => ({ ...f, raises_allowed: !f.raises_allowed }))
+                        }
+                        className={`flex w-full items-start justify-between gap-3 rounded-2xl border px-4 py-3 text-left transition ${
+                          form.raises_allowed
+                            ? "border-lime/50 bg-lime/15 text-white"
+                            : "border-white/15 bg-black/25 text-silver hover:border-white/30 hover:text-white"
+                        }`}
+                      >
+                        <span>
+                          <span className="block font-semibold">Permitir subir a aposta</span>
+                          <span className="text-xs opacity-70">
+                            Retadores podem propor um valor maior; você aceita ou recusa.
+                          </span>
+                        </span>
+                        <span className="text-lime">{form.raises_allowed ? "✓" : ""}</span>
+                      </button>
+                    </>
+                  )}
+
+                  {step === 4 && (
                     <Field
                       label="Data e horário"
                       type="datetime-local"
@@ -525,7 +611,7 @@ export default function NovoDesafioPage() {
                     />
                   )}
 
-                  {step === 4 && (
+                  {step === 5 && (
                     <>
                       <p className="text-xs uppercase tracking-wide text-silver">
                         Escolhe um template
@@ -609,12 +695,18 @@ export default function NovoDesafioPage() {
                     </>
                   )}
 
-                  {step === 5 && (
+                  {step === 6 && (
                     <div className="space-y-3 rounded-2xl border border-white/10 bg-black/25 p-4">
                       <ReviewRow label="Título" value={form.title} />
                       <ReviewRow label="Modalidade" value={modalityName} />
                       <ReviewRow label="Arena" value={arenaName} />
                       <ReviewRow label="Formato" value={`${typeLabel} · ${form.capacity} vagas`} />
+                      <ReviewRow
+                        label="Valor"
+                        value={`${formatBRL(stakeReaisToCents(form.stake_reais) ?? 0)}${
+                          form.raises_allowed ? " · sobe aposta" : ""
+                        }`}
+                      />
                       <ReviewRow
                         label="Quando"
                         value={new Date(form.starts_at).toLocaleString("pt-BR")}

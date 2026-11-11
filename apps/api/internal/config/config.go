@@ -27,6 +27,7 @@ type Config struct {
 	EmailFrom                string
 	ChallengeSubmissionFeeCents int
 	ChallengeEntryFeeCents      int
+	PotPlatformFeeBPS           int
 }
 
 func Load() (Config, error) {
@@ -50,6 +51,7 @@ func Load() (Config, error) {
 		EmailFrom:       getEnv("EMAIL_FROM", "Desafios Reais <noreply@desafiosreais.com>"),
 		ChallengeSubmissionFeeCents: getEnvInt("CHALLENGE_SUBMISSION_FEE_CENTS", 9900),
 		ChallengeEntryFeeCents:      getEnvInt("CHALLENGE_ENTRY_FEE_CENTS", 9900),
+		PotPlatformFeeBPS:           getEnvInt("POT_PLATFORM_FEE_BPS", 1000),
 	}
 
 	if cfg.SessionSecret == "" {

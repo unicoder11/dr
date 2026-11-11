@@ -1,6 +1,7 @@
 package httpapi
 
 import (
+	"context"
 	"net/http"
 
 	"github.com/desafiosreais/dr/apps/api/internal/config"
@@ -25,6 +26,13 @@ func NewRouter(cfg config.Config, db *pgxpool.Pool) http.Handler {
 
 	identitySvc := identity.NewService(db)
 	adminSvc := admin.NewService(db)
+	if db != nil {
+		_, _ = db.Exec(context.Background(), `
+			INSERT INTO platform_settings (key, value_int, updated_at)
+			VALUES ('pot_platform_fee_bps', $1, now())
+			ON CONFLICT (key) DO NOTHING
+		`, cfg.PotPlatformFeeBPS)
+	}
 	challengeSvc := challenges.NewService(db).
 		WithPublicURL(cfg.PublicURL).
 		WithSubmissionFee(cfg.ChallengeSubmissionFeeCents).
@@ -88,6 +96,11 @@ func NewRouter(cfg config.Config, db *pgxpool.Pool) http.Handler {
 	mux.Handle("PATCH /api/v1/challenges/{idOrSlug}", middleware.RequireAuth(http.HandlerFunc(chH.Update)))
 	mux.Handle("POST /api/v1/challenges/{idOrSlug}/transition", middleware.RequireAuth(http.HandlerFunc(chH.Transition)))
 	mux.Handle("POST /api/v1/challenges/{idOrSlug}/pay-submit", middleware.RequireAuth(http.HandlerFunc(chH.PayAndSubmit)))
+	mux.Handle("POST /api/v1/challenges/{idOrSlug}/pay-topup", middleware.RequireAuth(http.HandlerFunc(chH.PayStakeTopUp)))
+	mux.Handle("GET /api/v1/challenges/{idOrSlug}/raises", middleware.RequireAuth(http.HandlerFunc(chH.ListRaises)))
+	mux.Handle("POST /api/v1/challenges/{idOrSlug}/raises", middleware.RequireAuth(http.HandlerFunc(chH.ProposeRaise)))
+	mux.Handle("POST /api/v1/challenges/{idOrSlug}/raises/{raiseID}/accept", middleware.RequireAuth(http.HandlerFunc(chH.AcceptRaise)))
+	mux.Handle("POST /api/v1/challenges/{idOrSlug}/raises/{raiseID}/refuse", middleware.RequireAuth(http.HandlerFunc(chH.RefuseRaise)))
 	mux.Handle("POST /api/v1/challenges/{idOrSlug}/cover", middleware.RequireAuth(http.HandlerFunc(chH.SetCover)))
 	mux.Handle("POST /api/v1/media/upload", middleware.RequireAuth(http.HandlerFunc(mediaH.Upload)))
 	mux.HandleFunc("GET /api/v1/media/{id}", mediaH.GetMeta)
@@ -134,6 +147,11 @@ func NewRouter(cfg config.Config, db *pgxpool.Pool) http.Handler {
 	mux.Handle("GET /api/v1/admin/finance/overview", middleware.RequireAuth(middleware.RequireAdmin(http.HandlerFunc(adminH.FinanceOverview))))
 	mux.Handle("GET /api/v1/admin/finance/payments", middleware.RequireAuth(middleware.RequireAdmin(http.HandlerFunc(adminH.ListPayments))))
 	mux.Handle("PATCH /api/v1/admin/finance/payments/{kind}/{id}", middleware.RequireAuth(middleware.RequireAdmin(http.HandlerFunc(adminH.SetPaymentStatus))))
+	mux.Handle("GET /api/v1/admin/finance/settlements", middleware.RequireAuth(middleware.RequireAdmin(http.HandlerFunc(adminH.ListSettlements))))
+	mux.Handle("GET /api/v1/admin/settings", middleware.RequireAuth(middleware.RequireAdmin(http.HandlerFunc(adminH.ListSettings))))
+	mux.Handle("PATCH /api/v1/admin/settings/{key}", middleware.RequireAuth(middleware.RequireAdmin(http.HandlerFunc(adminH.SetSetting))))
+	mux.Handle("GET /api/v1/admin/challenges/{idOrSlug}/pot", middleware.RequireAuth(middleware.RequireAdmin(http.HandlerFunc(adminH.PotPreview))))
+	mux.Handle("POST /api/v1/admin/challenges/{idOrSlug}/settle", middleware.RequireAuth(middleware.RequireAdmin(http.HandlerFunc(adminH.SettleChallenge))))
 
 	var handler http.Handler = mux
 	handler = middleware.Authenticate(identitySvc)(handler)

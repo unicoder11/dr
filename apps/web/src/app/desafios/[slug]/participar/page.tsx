@@ -29,6 +29,9 @@ export default function ParticiparDesafioPage() {
   const [number, setNumber] = useState("");
   const [expiry, setExpiry] = useState("");
   const [cvv, setCvv] = useState("");
+  const [raiseReais, setRaiseReais] = useState("");
+  const [raiseBusy, setRaiseBusy] = useState(false);
+  const [raiseMsg, setRaiseMsg] = useState<string | null>(null);
 
   useEffect(() => {
     if (authLoading) return;
@@ -42,7 +45,7 @@ export default function ParticiparDesafioPage() {
       .catch((e) => setError(e instanceof Error ? e.message : "erro"));
   }, [authLoading, user, params.slug, router]);
 
-  const feeCents = challenge?.entry_fee_cents ?? 9900;
+  const feeCents = challenge?.stake_cents ?? challenge?.entry_fee_cents ?? 9900;
   const pix = useMemo(
     () => (challenge ? pixCopiaECola(feeCents, `entry-${challenge.id}-${user?.id || ""}`) : ""),
     [challenge, feeCents, user?.id],
@@ -143,7 +146,64 @@ export default function ParticiparDesafioPage() {
             {challenge.confirmed_count}/{challenge.capacity} vagas
           </p>
           <p className="mt-4 font-display text-4xl text-lime">{formatBRL(feeCents)}</p>
+          <p className="mt-1 text-xs text-silver">Valor definido pelo criador</p>
         </GlassPanel>
+
+        {challenge.raises_allowed && user?.id !== challenge.created_by && (
+          <GlassPanel className="mt-4 !rounded-2xl p-5">
+            <p className="text-sm font-semibold text-white">Subir a aposta</p>
+            <p className="mt-1 text-xs text-silver">
+              Propõe um valor maior. O criador aceita ou recusa antes de você pagar.
+            </p>
+            {challenge.pending_raise ? (
+              <p className="mt-3 text-sm text-lime">
+                Proposta pendente: {formatBRL(challenge.pending_raise.to_stake_cents)} (aguardando
+                @{challenge.creator_username})
+              </p>
+            ) : (
+              <div className="mt-3 flex flex-wrap gap-2">
+                <input
+                  type="text"
+                  inputMode="decimal"
+                  value={raiseReais}
+                  placeholder={`acima de ${(feeCents / 100).toFixed(2)}`}
+                  onChange={(e) => setRaiseReais(e.target.value.replace(/[^\d.,]/g, ""))}
+                  className="min-w-[140px] flex-1 rounded-full border border-white/15 bg-black/35 px-4 py-2 text-sm text-white outline-none focus:border-lime"
+                />
+                <Button
+                  type="button"
+                  variant="ghost"
+                  className="!px-4 !py-2 text-xs"
+                  disabled={raiseBusy}
+                  onClick={async () => {
+                    const n = Number(raiseReais.replace(",", "."));
+                    if (!Number.isFinite(n) || n * 100 <= feeCents) {
+                      setRaiseMsg("Informe um valor maior que a aposta atual.");
+                      return;
+                    }
+                    setRaiseBusy(true);
+                    setRaiseMsg(null);
+                    try {
+                      const raise = await api.proposeRaise(
+                        challenge.slug,
+                        Math.round(n * 100),
+                      );
+                      setChallenge({ ...challenge, pending_raise: raise });
+                      setRaiseMsg("Proposta enviada ao criador.");
+                    } catch (e) {
+                      setRaiseMsg(e instanceof Error ? e.message : "erro");
+                    } finally {
+                      setRaiseBusy(false);
+                    }
+                  }}
+                >
+                  {raiseBusy ? "…" : "Propor"}
+                </Button>
+              </div>
+            )}
+            {raiseMsg && <p className="mt-2 text-xs text-silver">{raiseMsg}</p>}
+          </GlassPanel>
+        )}
 
         <div className="mt-6 flex gap-2">
           {(["pix", "card"] as const).map((item) => (

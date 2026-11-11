@@ -9,6 +9,7 @@ import {
   api,
   type AdminFinanceOverview,
   type AdminPayment,
+  type AdminSettlement,
 } from "@/lib/api";
 
 function formatBRL(cents: number) {
@@ -85,11 +86,14 @@ export default function AdminFinanceiroPage() {
 function FinanceiroPanel() {
   const [overview, setOverview] = useState<AdminFinanceOverview | null>(null);
   const [list, setList] = useState<AdminPayment[]>([]);
+  const [settlements, setSettlements] = useState<AdminSettlement[]>([]);
   const [kind, setKind] = useState("");
   const [status, setStatus] = useState("");
   const [method, setMethod] = useState("");
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState<string | null>(null);
+  const [feePct, setFeePct] = useState("10");
+  const [feeBusy, setFeeBusy] = useState(false);
 
   const load = useCallback(() => {
     return Promise.all([
@@ -99,10 +103,15 @@ function FinanceiroPanel() {
         status: status || undefined,
         method: method || undefined,
       }),
+      api.adminSettlements(),
     ])
-      .then(([o, payments]) => {
+      .then(([o, payments, settles]) => {
         setOverview(o);
         setList(payments);
+        setSettlements(settles);
+        if (o.platform_fee_bps != null) {
+          setFeePct((o.platform_fee_bps / 100).toString());
+        }
         setError(null);
       })
       .catch((e) => setError(e instanceof Error ? e.message : "erro"));
@@ -156,29 +165,72 @@ function FinanceiroPanel() {
         />
       </div>
 
-      <div className="mt-3 grid gap-3 sm:grid-cols-3">
+      <div className="mt-3 grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
         <AdminStat
-          label="Criação de desafios"
+          label="Poços abertos"
+          value={overview ? formatBRL(overview.open_pots_cents ?? 0) : "—"}
+          hint="ainda não liberados"
+        />
+        <AdminStat
+          label="Taxa plataforma"
+          value={overview ? formatBRL(overview.platform_fees_cents ?? 0) : "—"}
+          hint={`${((overview?.platform_fee_bps ?? 1000) / 100).toFixed(1)}% · ${overview?.settlements_count ?? 0} settles`}
+        />
+        <AdminStat
+          label="Pago a ganhadores"
+          value={overview ? formatBRL(overview.winner_payouts_cents ?? 0) : "—"}
+        />
+        <AdminStat
+          label="Criação / entradas"
           value={
             overview
-              ? formatBRL(overview.by_kind_paid_cents?.submission ?? 0)
+              ? formatBRL(
+                  (overview.by_kind_paid_cents?.submission ?? 0) +
+                    (overview.by_kind_paid_cents?.entry ?? 0),
+                )
               : "—"
           }
         />
-        <AdminStat
-          label="Participações"
-          value={
-            overview ? formatBRL(overview.by_kind_paid_cents?.entry ?? 0) : "—"
-          }
-        />
-        <AdminStat
-          label="Reservas"
-          value={
-            overview
-              ? formatBRL(overview.by_kind_paid_cents?.booking ?? 0)
-              : "—"
-          }
-        />
+      </div>
+
+      <div className="mt-4 flex flex-wrap items-end gap-3 rounded-2xl border border-white/10 bg-black/25 p-4">
+        <label className="text-sm text-silver">
+          Comissão da plataforma (%)
+          <input
+            type="text"
+            inputMode="decimal"
+            value={feePct}
+            onChange={(e) => setFeePct(e.target.value.replace(/[^\d.,]/g, ""))}
+            className="mt-1.5 block w-28 rounded-full border border-white/15 bg-black/40 px-4 py-2 text-white outline-none focus:border-lime"
+          />
+        </label>
+        <Button
+          type="button"
+          variant="ghost"
+          className="!px-4 !py-2 text-xs"
+          disabled={feeBusy}
+          onClick={async () => {
+            const n = Number(feePct.replace(",", "."));
+            if (!Number.isFinite(n) || n < 0 || n > 50) {
+              setError("Taxa entre 0% e 50%.");
+              return;
+            }
+            setFeeBusy(true);
+            try {
+              await api.adminSetSetting("pot_platform_fee_bps", Math.round(n * 100));
+              await load();
+            } catch (e) {
+              setError(e instanceof Error ? e.message : "erro");
+            } finally {
+              setFeeBusy(false);
+            }
+          }}
+        >
+          {feeBusy ? "Salvando…" : "Salvar taxa"}
+        </Button>
+        <p className="text-xs text-silver">
+          Aplicada na liberação do pozo (ganhador fica com o restante).
+        </p>
       </div>
 
       {(overview?.by_method_paid_cents &&
@@ -314,6 +366,59 @@ function FinanceiroPanel() {
                       {busy === p.id ? "…" : "Reembolsar"}
                     </Button>
                   )}
+                </td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </AdminTable>
+
+      <h2 className="mt-8 font-display text-2xl text-white">Liberações de pozo</h2>
+      <AdminTable>
+        <table className="min-w-full text-left text-sm">
+          <thead className="bg-white/5 text-silver">
+            <tr>
+              <th className="px-4 py-3 font-medium">Quando</th>
+              <th className="px-4 py-3 font-medium">Desafio</th>
+              <th className="px-4 py-3 font-medium">Ganhador</th>
+              <th className="px-4 py-3 font-medium">Pozo</th>
+              <th className="px-4 py-3 font-medium">Taxa DR</th>
+              <th className="px-4 py-3 font-medium">Payout</th>
+            </tr>
+          </thead>
+          <tbody>
+            {settlements.length === 0 && (
+              <tr>
+                <td colSpan={6} className="px-4 py-8 text-center text-silver">
+                  Nenhuma liberação ainda.
+                </td>
+              </tr>
+            )}
+            {settlements.map((s) => (
+              <tr key={s.id} className="border-t border-white/10">
+                <td className="px-4 py-3 text-xs text-silver whitespace-nowrap">
+                  {new Date(s.created_at).toLocaleString("pt-BR")}
+                </td>
+                <td className="px-4 py-3">
+                  <Link
+                    href={`/desafios/${s.challenge_slug}`}
+                    className="text-white hover:text-lime"
+                  >
+                    {s.challenge_title}
+                  </Link>
+                </td>
+                <td className="px-4 py-3 text-white">
+                  @{s.winner_username || "—"}
+                </td>
+                <td className="px-4 py-3 text-white">{formatBRL(s.pot_cents)}</td>
+                <td className="px-4 py-3 text-lime">
+                  {formatBRL(s.platform_fee_cents)}{" "}
+                  <span className="text-xs text-silver">
+                    ({(s.platform_fee_bps / 100).toFixed(1)}%)
+                  </span>
+                </td>
+                <td className="px-4 py-3 text-white">
+                  {formatBRL(s.winner_payout_cents)}
                 </td>
               </tr>
             ))}

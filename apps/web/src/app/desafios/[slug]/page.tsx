@@ -1,6 +1,6 @@
 "use client";
 
-import { FormEvent, useEffect, useState } from "react";
+import { FormEvent, useEffect, useRef, useState } from "react";
 import { useParams } from "next/navigation";
 import {
   api,
@@ -13,6 +13,7 @@ import { Button } from "@/components/ui/Button";
 
 export default function ChallengePublicPage() {
   const params = useParams<{ slug: string }>();
+  const coverInputRef = useRef<HTMLInputElement>(null);
   const [challenge, setChallenge] = useState<Challenge | null>(null);
   const [participants, setParticipants] = useState<Participant[]>([]);
   const [user, setUser] = useState<ApiUser | null>(null);
@@ -20,6 +21,9 @@ export default function ChallengePublicPage() {
   const [busy, setBusy] = useState(false);
   const [inviteUser, setInviteUser] = useState("");
   const [coverBusy, setCoverBusy] = useState(false);
+  const [coverPreview, setCoverPreview] = useState<string | null>(null);
+  const [coverDrag, setCoverDrag] = useState(false);
+  const [coverName, setCoverName] = useState<string | null>(null);
 
   async function load() {
     const ch = await api.challenge(params.slug);
@@ -43,6 +47,12 @@ export default function ChallengePublicPage() {
     api.trackView(params.slug, key).catch(() => undefined);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [params.slug]);
+
+  useEffect(() => {
+    return () => {
+      if (coverPreview?.startsWith("blob:")) URL.revokeObjectURL(coverPreview);
+    };
+  }, [coverPreview]);
 
   async function transition(status: string) {
     if (!challenge) return;
@@ -110,16 +120,30 @@ export default function ChallengePublicPage() {
 
   async function onCoverChange(file: File | null) {
     if (!challenge || !file) return;
+    if (!file.type.startsWith("image/")) {
+      setError("Envie uma imagem (jpg, png, webp ou gif).");
+      return;
+    }
+    if (file.size > 5 * 1024 * 1024) {
+      setError("Capa até 5MB.");
+      return;
+    }
+    const localUrl = URL.createObjectURL(file);
+    setCoverPreview(localUrl);
+    setCoverName(file.name);
     setCoverBusy(true);
     setError(null);
     try {
       const asset = await api.uploadMedia(file, "cover", challenge.title);
       const updated = await api.setChallengeCover(challenge.slug, asset.id);
       setChallenge(updated);
+      setCoverPreview(updated.cover_url || localUrl);
     } catch (e) {
       setError(e instanceof Error ? e.message : "erro");
+      setCoverPreview(challenge.cover_url || null);
     } finally {
       setCoverBusy(false);
+      if (coverInputRef.current) coverInputRef.current.value = "";
     }
   }
 
@@ -165,10 +189,107 @@ export default function ChallengePublicPage() {
           </dd>
         </div>
         <div>
+          <dt className="text-silver">Valor do desafio</dt>
+          <dd className="mt-1 text-white">
+            {((challenge.stake_cents ?? challenge.entry_fee_cents ?? 9900) / 100).toLocaleString(
+              "pt-BR",
+              { style: "currency", currency: "BRL" },
+            )}
+            {challenge.raises_allowed ? " · sobe aposta" : ""}
+          </dd>
+        </div>
+        <div>
+          <dt className="text-silver">Pozo</dt>
+          <dd className="mt-1 text-white">
+            {((challenge.pot_cents ?? 0) / 100).toLocaleString("pt-BR", {
+              style: "currency",
+              currency: "BRL",
+            })}
+            {challenge.platform_fee_bps
+              ? ` · taxa DR ${(challenge.platform_fee_bps / 100).toFixed(0)}%`
+              : ""}
+            {challenge.settled && challenge.winner_username
+              ? ` · ganhador @${challenge.winner_username}`
+              : ""}
+          </dd>
+        </div>
+        <div>
           <dt className="text-silver">Regulamento</dt>
           <dd className="mt-1 text-white">{challenge.regulation || "—"}</dd>
         </div>
       </dl>
+
+      {isOwner && challenge.pending_raise && (
+        <section className="mt-8 rounded-2xl border border-lime/30 bg-lime/5 p-5">
+          <h2 className="font-display text-2xl text-white">Proposta de aposta</h2>
+          <p className="mt-2 text-sm text-silver">
+            @{challenge.pending_raise.proposer_username || "retador"} quer subir de{" "}
+            {(challenge.pending_raise.from_stake_cents / 100).toLocaleString("pt-BR", {
+              style: "currency",
+              currency: "BRL",
+            })}{" "}
+            para{" "}
+            <span className="text-lime">
+              {(challenge.pending_raise.to_stake_cents / 100).toLocaleString("pt-BR", {
+                style: "currency",
+                currency: "BRL",
+              })}
+            </span>
+          </p>
+          <div className="mt-4 flex flex-wrap gap-3">
+            <Button
+              disabled={busy}
+              onClick={async () => {
+                setBusy(true);
+                setError(null);
+                try {
+                  await api.acceptRaise(challenge.slug, challenge.pending_raise!.id);
+                  await load();
+                } catch (e) {
+                  setError(e instanceof Error ? e.message : "erro");
+                } finally {
+                  setBusy(false);
+                }
+              }}
+            >
+              Aceitar
+            </Button>
+            <Button
+              variant="ghost"
+              disabled={busy}
+              onClick={async () => {
+                setBusy(true);
+                setError(null);
+                try {
+                  await api.refuseRaise(challenge.slug, challenge.pending_raise!.id);
+                  await load();
+                } catch (e) {
+                  setError(e instanceof Error ? e.message : "erro");
+                } finally {
+                  setBusy(false);
+                }
+              }}
+            >
+              Recusar
+            </Button>
+          </div>
+        </section>
+      )}
+
+      {isOwner && (challenge.creator_topup_due_cents ?? 0) > 0 && (
+        <section className="mt-6 rounded-2xl border border-amber-400/30 bg-amber-400/5 p-5">
+          <p className="text-sm text-amber-100">
+            Falta complementar a aposta:{" "}
+            {((challenge.creator_topup_due_cents ?? 0) / 100).toLocaleString("pt-BR", {
+              style: "currency",
+              currency: "BRL",
+            })}
+          </p>
+          <Button href={`/desafios/${challenge.slug}/pagar`} className="mt-3">
+            Pagar diferença
+          </Button>
+        </section>
+      )}
 
       <section className="mt-10 border-t border-white/10 pt-8">
         <h2 className="font-display text-2xl text-white">Participantes</h2>
@@ -188,16 +309,96 @@ export default function ChallengePublicPage() {
       </section>
 
       {isOwner && (
-        <label className="mt-8 block text-sm text-silver">
-          {coverBusy ? "Enviando capa..." : "Atualizar capa"}
+        <section className="mt-10 border-t border-white/10 pt-8">
+          <div className="flex flex-wrap items-end justify-between gap-2">
+            <div>
+              <p className="text-[10px] font-semibold uppercase tracking-[0.22em] text-lime">
+                Visual
+              </p>
+              <h2 className="mt-1 font-display text-2xl text-white">Capa do desafio</h2>
+              <p className="mt-1 text-sm text-silver">
+                Imagem larga (21:9). JPG, PNG ou WebP · até 5MB.
+              </p>
+            </div>
+            {coverBusy && (
+              <span className="rounded-full border border-lime/30 bg-lime/10 px-3 py-1 text-xs font-semibold text-lime">
+                Enviando…
+              </span>
+            )}
+          </div>
+
+          <button
+            type="button"
+            disabled={coverBusy}
+            onClick={() => coverInputRef.current?.click()}
+            onDragEnter={(e) => {
+              e.preventDefault();
+              setCoverDrag(true);
+            }}
+            onDragOver={(e) => {
+              e.preventDefault();
+              setCoverDrag(true);
+            }}
+            onDragLeave={(e) => {
+              e.preventDefault();
+              setCoverDrag(false);
+            }}
+            onDrop={(e) => {
+              e.preventDefault();
+              setCoverDrag(false);
+              void onCoverChange(e.dataTransfer.files?.[0] || null);
+            }}
+            className={`group relative mt-5 w-full overflow-hidden rounded-2xl border text-left transition ${
+              coverDrag
+                ? "border-lime bg-lime/10"
+                : "border-white/15 bg-white/[0.03] hover:border-lime/45 hover:bg-white/[0.05]"
+            } ${coverBusy ? "pointer-events-none opacity-70" : ""}`}
+          >
+            {(coverPreview || challenge.cover_url) ? (
+              // eslint-disable-next-line @next/next/no-img-element
+              <img
+                src={coverPreview || challenge.cover_url || ""}
+                alt="Capa atual"
+                className="aspect-[21/9] w-full object-cover transition duration-500 group-hover:scale-[1.02]"
+              />
+            ) : (
+              <div className="flex aspect-[21/9] w-full flex-col items-center justify-center gap-2 bg-gradient-to-br from-white/[0.04] to-transparent px-6">
+                <span className="font-display text-3xl text-white/80">+</span>
+                <span className="text-sm text-silver">Solta a imagem aqui ou toca para escolher</span>
+              </div>
+            )}
+            <div className="absolute inset-x-0 bottom-0 bg-gradient-to-t from-racing/90 via-racing/40 to-transparent px-4 pb-4 pt-10">
+              <div className="flex flex-wrap items-center justify-between gap-2">
+                <div>
+                  <p className="text-sm font-semibold text-white">
+                    {challenge.cover_url || coverPreview
+                      ? "Trocar capa"
+                      : "Adicionar capa"}
+                  </p>
+                  <p className="text-xs text-silver">
+                    {coverName
+                      ? coverName
+                      : coverDrag
+                        ? "Solta para enviar"
+                        : "Arrasta ou escolhe do álbum"}
+                  </p>
+                </div>
+                <span className="rounded-full border border-lime/40 bg-lime/15 px-3 py-1 text-xs font-semibold uppercase tracking-wide text-lime">
+                  {coverBusy ? "…" : "Upload"}
+                </span>
+              </div>
+            </div>
+          </button>
+
           <input
+            ref={coverInputRef}
             type="file"
             accept="image/jpeg,image/png,image/webp,image/gif"
             disabled={coverBusy}
-            onChange={(e) => onCoverChange(e.target.files?.[0] || null)}
-            className="mt-1 block w-full text-sm text-silver file:mr-3 file:rounded-sm file:border-0 file:bg-lime file:px-3 file:py-1.5 file:font-semibold file:text-racing"
+            className="sr-only"
+            onChange={(e) => void onCoverChange(e.target.files?.[0] || null)}
           />
-        </label>
+        </section>
       )}
 
       {isOwner && challenge.status === "published" && (
@@ -224,12 +425,12 @@ export default function ChallengePublicPage() {
       <div className="mt-10 flex flex-wrap gap-3">
         {canJoin && (
           <Button href={`/desafios/${challenge.slug}/participar`}>
-            {`Participar · ${((challenge.entry_fee_cents ?? 9900) / 100).toLocaleString("pt-BR", { style: "currency", currency: "BRL" })}`}
+            {`Retar · ${((challenge.stake_cents ?? challenge.entry_fee_cents ?? 9900) / 100).toLocaleString("pt-BR", { style: "currency", currency: "BRL" })}`}
           </Button>
         )}
         {canSubmit && !challenge.submission_paid && (
           <Button href={`/desafios/${challenge.slug}/pagar`}>
-            {`Pagar e enviar · ${((challenge.submission_fee_cents ?? 9900) / 100).toLocaleString("pt-BR", { style: "currency", currency: "BRL" })}`}
+            {`Pagar e enviar · ${((challenge.stake_cents ?? challenge.submission_fee_cents ?? 9900) / 100).toLocaleString("pt-BR", { style: "currency", currency: "BRL" })}`}
           </Button>
         )}
         {canSubmit && challenge.submission_paid && (
@@ -239,7 +440,7 @@ export default function ChallengePublicPage() {
         )}
         {canPublish && !challenge.submission_paid && (
           <Button href={`/desafios/${challenge.slug}/pagar`}>
-            Pagar taxa para publicar
+            Pagar valor para publicar
           </Button>
         )}
         {canPublish && challenge.submission_paid && (

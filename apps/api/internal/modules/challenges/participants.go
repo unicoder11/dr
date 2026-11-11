@@ -14,10 +14,10 @@ import (
 )
 
 var (
-	ErrChallengeFull     = errors.New("challenge_full")
-	ErrNotJoinable       = errors.New("not_joinable")
+	ErrChallengeFull      = errors.New("challenge_full")
+	ErrNotJoinable        = errors.New("not_joinable")
 	ErrAlreadyParticipant = errors.New("already_participant")
-	ErrUserNotFound      = errors.New("user_not_found")
+	ErrUserNotFound       = errors.New("user_not_found")
 )
 
 const (
@@ -29,32 +29,32 @@ const (
 )
 
 type Participant struct {
-	ID              uuid.UUID `json:"id"`
-	ChallengeID     uuid.UUID `json:"challenge_id"`
-	UserID          uuid.UUID `json:"user_id"`
-	Username        string    `json:"username"`
-	DisplayName     string    `json:"display_name"`
-	TeamName        *string   `json:"team_name,omitempty"`
-	Status          string    `json:"status"`
+	ID              uuid.UUID  `json:"id"`
+	ChallengeID     uuid.UUID  `json:"challenge_id"`
+	UserID          uuid.UUID  `json:"user_id"`
+	Username        string     `json:"username"`
+	DisplayName     string     `json:"display_name"`
+	TeamName        *string    `json:"team_name,omitempty"`
+	Status          string     `json:"status"`
 	InvitedBy       *uuid.UUID `json:"invited_by,omitempty"`
-	ChallengeSlug   string    `json:"challenge_slug,omitempty"`
-	ChallengeTitle  string    `json:"challenge_title,omitempty"`
-	ChallengeStarts time.Time `json:"challenge_starts_at,omitempty"`
-	CreatedAt       time.Time `json:"created_at"`
+	ChallengeSlug   string     `json:"challenge_slug,omitempty"`
+	ChallengeTitle  string     `json:"challenge_title,omitempty"`
+	ChallengeStarts time.Time  `json:"challenge_starts_at,omitempty"`
+	CreatedAt       time.Time  `json:"created_at"`
 }
 
 type CalendarItem struct {
-	ChallengeID     uuid.UUID `json:"challenge_id"`
-	Slug            string    `json:"slug"`
-	Title           string    `json:"title"`
-	Status          string    `json:"challenge_status"`
-	ParticipantStatus string  `json:"participant_status,omitempty"`
-	Role            string    `json:"role"` // owner | participant
-	ModalityName    string    `json:"modality_name"`
-	ArenaName       string    `json:"arena_name"`
-	StartsAt        time.Time `json:"starts_at"`
-	Capacity        int       `json:"capacity"`
-	ConfirmedCount  int       `json:"confirmed_count"`
+	ChallengeID       uuid.UUID `json:"challenge_id"`
+	Slug              string    `json:"slug"`
+	Title             string    `json:"title"`
+	Status            string    `json:"challenge_status"`
+	ParticipantStatus string    `json:"participant_status,omitempty"`
+	Role              string    `json:"role"` // owner | participant
+	ModalityName      string    `json:"modality_name"`
+	ArenaName         string    `json:"arena_name"`
+	StartsAt          time.Time `json:"starts_at"`
+	Capacity          int       `json:"capacity"`
+	ConfirmedCount    int       `json:"confirmed_count"`
 }
 
 func (s *Service) ListParticipants(ctx context.Context, idOrSlug string, viewer IdentityActor) ([]Participant, error) {
@@ -113,6 +113,9 @@ func (s *Service) PayAndJoin(ctx context.Context, actor IdentityActor, idOrSlug,
 	if ch.ConfirmedCount >= ch.Capacity {
 		return Participant{}, ErrChallengeFull
 	}
+	if ch.PendingRaise != nil && ch.PendingRaise.ProposedBy == actor.ID {
+		return Participant{}, ErrRaisePending
+	}
 
 	tx, err := s.db.Begin(ctx)
 	if err != nil {
@@ -150,12 +153,12 @@ func (s *Service) PayAndJoin(ctx context.Context, actor IdentityActor, idOrSlug,
 	`, ch.ID, actor.ID).Scan(&alreadyPaid)
 
 	if !alreadyPaid {
-		payload := map[string]string{"method": method}
+		payload := map[string]string{"method": method, "kind": "stake_entry"}
 		if last4 != "" {
 			payload["last4"] = last4
 		}
 		raw, _ := json.Marshal(payload)
-		paymentID := fmt.Sprintf("entry-%s-%s", method, actor.ID.String())
+		paymentID := fmt.Sprintf("entry-%s-%s-%d", method, actor.ID.String(), time.Now().UnixNano())
 		_, err = tx.Exec(ctx, `
 			INSERT INTO challenge_entry_payments (
 				id, challenge_id, user_id, amount_cents, currency, method, status, provider_payment_id, raw_payload
@@ -163,7 +166,7 @@ func (s *Service) PayAndJoin(ctx context.Context, actor IdentityActor, idOrSlug,
 			ON CONFLICT (challenge_id, user_id) DO UPDATE
 			SET status = 'paid', method = EXCLUDED.method, provider_payment_id = EXCLUDED.provider_payment_id,
 			    raw_payload = EXCLUDED.raw_payload, amount_cents = EXCLUDED.amount_cents
-		`, uuid.New(), ch.ID, actor.ID, s.entryFeeCents, method, paymentID, raw)
+		`, uuid.New(), ch.ID, actor.ID, ch.StakeCents, method, paymentID, raw)
 		if err != nil {
 			return Participant{}, err
 		}
@@ -195,7 +198,7 @@ func (s *Service) PayAndJoin(ctx context.Context, actor IdentityActor, idOrSlug,
 		INSERT INTO audit_logs (id, actor_user_id, action, entity_type, entity_id, payload)
 		VALUES ($1,$2,'challenge_pay_join','challenge',$3,
 		        jsonb_build_object('method',$4::text,'amount_cents',$5::int,'user_id',$6::text))
-	`, uuid.New(), actor.ID, ch.ID.String(), method, s.entryFeeCents, actor.ID.String())
+	`, uuid.New(), actor.ID, ch.ID.String(), method, ch.StakeCents, actor.ID.String())
 
 	if err := tx.Commit(ctx); err != nil {
 		return Participant{}, err

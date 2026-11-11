@@ -42,7 +42,13 @@ export default function PagarDesafioPage() {
       .catch((e) => setError(e instanceof Error ? e.message : "erro"));
   }, [authLoading, user, params.slug, router]);
 
-  const feeCents = challenge?.submission_fee_cents ?? 9900;
+  const feeCents =
+    challenge?.creator_topup_due_cents && challenge.creator_topup_due_cents > 0
+      ? challenge.creator_topup_due_cents
+      : (challenge?.stake_cents ?? challenge?.submission_fee_cents ?? 9900);
+  const isTopUp = Boolean(
+    challenge?.creator_topup_due_cents && challenge.creator_topup_due_cents > 0,
+  );
   const pix = useMemo(
     () => (challenge ? pixCopiaECola(feeCents, challenge.id) : ""),
     [challenge, feeCents],
@@ -55,12 +61,28 @@ export default function PagarDesafioPage() {
       .catch(() => setQr(""));
   }, [pix]);
 
+  async function pay(
+    method: "pix" | "card",
+    card?: {
+      holder: string;
+      number: string;
+      expiry: string;
+      cvv: string;
+    },
+  ) {
+    if (!challenge) throw new Error("challenge_missing");
+    if (isTopUp) {
+      return api.payStakeTopUp(challenge.slug, { method, ...card });
+    }
+    return api.paySubmitChallenge(challenge.slug, { method, ...card });
+  }
+
   async function confirmPix() {
     if (!challenge) return;
     setBusy(true);
     setError(null);
     try {
-      const updated = await api.paySubmitChallenge(challenge.slug, { method: "pix" });
+      const updated = await pay("pix");
       router.push(`/desafios/${updated.slug}?submitted=1`);
     } catch (e) {
       setError(e instanceof Error ? e.message : "Não foi possível confirmar o Pix.");
@@ -75,8 +97,7 @@ export default function PagarDesafioPage() {
     setBusy(true);
     setError(null);
     try {
-      const updated = await api.paySubmitChallenge(challenge.slug, {
-        method: "card",
+      const updated = await pay("card", {
         holder,
         number,
         expiry,
@@ -107,15 +128,15 @@ export default function PagarDesafioPage() {
 
   if (!challenge) return null;
 
-  if (challenge.status !== "draft") {
+  if (challenge.status !== "draft" && !isTopUp) {
     return (
       <GlassShell bg={brand.images.challenge}>
         <GlassPanel className="mx-auto max-w-lg !rounded-2xl p-7">
           <h1 className="font-display text-4xl text-white">Pagamento</h1>
           <p className="mt-3 text-silver">
             {challenge.submission_paid
-              ? "Este desafio já foi pago e enviado."
-              : "Só rascunhos aguardam pagamento para aprovação."}
+              ? "Este desafio já está com a aposta coberta."
+              : "Só rascunhos ou top-ups de aposta aguardam pagamento."}
           </p>
           <Button href={`/desafios/${challenge.slug}`} className="mt-6">
             Voltar ao desafio
@@ -129,14 +150,15 @@ export default function PagarDesafioPage() {
     <GlassShell bg={brand.images.challenge}>
       <div className="mx-auto max-w-3xl">
         <p className="text-[11px] font-semibold uppercase tracking-[0.35em] text-lime">
-          Taxa de envio
+          {isTopUp ? "Complemento de aposta" : "Valor do desafio"}
         </p>
         <h1 className="mt-2 font-display text-4xl text-white md:text-5xl">
-          Pagar para enviar
+          {isTopUp ? "Completar aposta" : "Pagar para enviar"}
         </h1>
         <p className="mt-3 max-w-xl text-sm text-silver md:text-base">
-          Para mandar o desafio para aprovação, confirme o depósito. Depois do pagamento ele
-          entra na fila da equipe DR.
+          {isTopUp
+            ? "Você aceitou uma subida de aposta. Pague a diferença para manter o desafio válido."
+            : "Para finalizar a criação e enviar à aprovação, pague o valor que você definiu para o desafio."}
         </p>
 
         <GlassPanel className="mt-8 !rounded-2xl p-5 md:p-6">

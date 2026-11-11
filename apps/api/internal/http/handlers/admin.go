@@ -203,6 +203,75 @@ func (h AdminHandler) SetPaymentStatus(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, http.StatusOK, p)
 }
 
+func (h AdminHandler) ListSettings(w http.ResponseWriter, r *http.Request) {
+	u, _ := middleware.UserFromContext(r.Context())
+	list, err := h.Admin.ListSettings(r.Context(), u.Roles)
+	if err != nil {
+		mapAdminErr(w, err)
+		return
+	}
+	writeJSON(w, http.StatusOK, list)
+}
+
+type setSettingReq struct {
+	ValueInt int `json:"value_int"`
+}
+
+func (h AdminHandler) SetSetting(w http.ResponseWriter, r *http.Request) {
+	u, _ := middleware.UserFromContext(r.Context())
+	var req setSettingReq
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		writeJSON(w, http.StatusBadRequest, map[string]string{"error": "invalid_json"})
+		return
+	}
+	st, err := h.Admin.SetSettingInt(r.Context(), u.ID, u.Roles, r.PathValue("key"), req.ValueInt)
+	if err != nil {
+		mapAdminErr(w, err)
+		return
+	}
+	writeJSON(w, http.StatusOK, st)
+}
+
+func (h AdminHandler) PotPreview(w http.ResponseWriter, r *http.Request) {
+	u, _ := middleware.UserFromContext(r.Context())
+	p, err := h.Admin.PotPreview(r.Context(), u.Roles, r.PathValue("idOrSlug"))
+	if err != nil {
+		mapAdminErr(w, err)
+		return
+	}
+	writeJSON(w, http.StatusOK, p)
+}
+
+type settleReq struct {
+	WinnerUserID uuid.UUID `json:"winner_user_id"`
+	Notes        string    `json:"notes"`
+}
+
+func (h AdminHandler) SettleChallenge(w http.ResponseWriter, r *http.Request) {
+	u, _ := middleware.UserFromContext(r.Context())
+	var req settleReq
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil || req.WinnerUserID == uuid.Nil {
+		writeJSON(w, http.StatusBadRequest, map[string]string{"error": "invalid_json"})
+		return
+	}
+	st, err := h.Admin.SettleChallenge(r.Context(), u.ID, u.Roles, r.PathValue("idOrSlug"), req.WinnerUserID, req.Notes)
+	if err != nil {
+		mapAdminErr(w, err)
+		return
+	}
+	writeJSON(w, http.StatusOK, st)
+}
+
+func (h AdminHandler) ListSettlements(w http.ResponseWriter, r *http.Request) {
+	u, _ := middleware.UserFromContext(r.Context())
+	list, err := h.Admin.ListSettlements(r.Context(), u.Roles)
+	if err != nil {
+		mapAdminErr(w, err)
+		return
+	}
+	writeJSON(w, http.StatusOK, list)
+}
+
 func mapAdminErr(w http.ResponseWriter, err error) {
 	switch {
 	case errors.Is(err, admin.ErrForbidden):

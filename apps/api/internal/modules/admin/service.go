@@ -227,6 +227,7 @@ type ChallengeModRow struct {
 	ModalityName    string    `json:"modality_name"`
 	ArenaName       string    `json:"arena_name"`
 	CreatorUsername string    `json:"creator_username"`
+	CreatedBy       uuid.UUID `json:"created_by"`
 	StartsAt        time.Time `json:"starts_at"`
 	CreatedAt       time.Time `json:"created_at"`
 }
@@ -236,7 +237,7 @@ func (s *Service) ListChallenges(ctx context.Context, actorRoles []string, statu
 		return nil, ErrForbidden
 	}
 	q := `
-		SELECT c.id, c.slug, c.title, c.status, m.name, a.name, p.username, c.starts_at, c.created_at
+		SELECT c.id, c.slug, c.title, c.status, m.name, a.name, p.username, c.created_by, c.starts_at, c.created_at
 		FROM challenges c
 		JOIN modalities m ON m.id = c.modality_id
 		JOIN arenas a ON a.id = c.arena_id
@@ -256,7 +257,7 @@ func (s *Service) ListChallenges(ctx context.Context, actorRoles []string, statu
 	var out []ChallengeModRow
 	for rows.Next() {
 		var r ChallengeModRow
-		if err := rows.Scan(&r.ID, &r.Slug, &r.Title, &r.Status, &r.ModalityName, &r.ArenaName, &r.CreatorUsername, &r.StartsAt, &r.CreatedAt); err != nil {
+		if err := rows.Scan(&r.ID, &r.Slug, &r.Title, &r.Status, &r.ModalityName, &r.ArenaName, &r.CreatorUsername, &r.CreatedBy, &r.StartsAt, &r.CreatedAt); err != nil {
 			return nil, err
 		}
 		out = append(out, r)

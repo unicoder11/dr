@@ -35,6 +35,8 @@ type challengeBody struct {
 	Capacity        int        `json:"capacity"`
 	StartsAt        time.Time  `json:"starts_at"`
 	EndsAt          *time.Time `json:"ends_at"`
+	StakeCents      int        `json:"stake_cents"`
+	RaisesAllowed   bool       `json:"raises_allowed"`
 }
 
 func (h ChallengesHandler) ListModalities(w http.ResponseWriter, r *http.Request) {
@@ -115,6 +117,8 @@ func (h ChallengesHandler) Create(w http.ResponseWriter, r *http.Request) {
 		Capacity:        body.Capacity,
 		StartsAt:        body.StartsAt,
 		EndsAt:          body.EndsAt,
+		StakeCents:      body.StakeCents,
+		RaisesAllowed:   body.RaisesAllowed,
 	})
 	if err != nil {
 		mapChallengeErr(w, err)
@@ -144,6 +148,8 @@ func (h ChallengesHandler) Update(w http.ResponseWriter, r *http.Request) {
 		Capacity:        body.Capacity,
 		StartsAt:        body.StartsAt,
 		EndsAt:          body.EndsAt,
+		StakeCents:      body.StakeCents,
+		RaisesAllowed:   body.RaisesAllowed,
 	})
 	if err != nil {
 		mapChallengeErr(w, err)
@@ -253,6 +259,100 @@ func onlyDigits(s string) string {
 	return b.String()
 }
 
+type proposeRaiseBody struct {
+	StakeCents int `json:"stake_cents"`
+}
+
+func (h ChallengesHandler) ProposeRaise(w http.ResponseWriter, r *http.Request) {
+	u, ok := middleware.UserFromContext(r.Context())
+	if !ok {
+		writeJSON(w, http.StatusUnauthorized, map[string]string{"error": "unauthorized"})
+		return
+	}
+	var body proposeRaiseBody
+	if err := json.NewDecoder(r.Body).Decode(&body); err != nil || body.StakeCents <= 0 {
+		writeJSON(w, http.StatusBadRequest, map[string]string{"error": "invalid_json"})
+		return
+	}
+	raise, err := h.Svc.ProposeRaise(r.Context(), challenges.Actor(u.ID, u.Roles), r.PathValue("idOrSlug"), body.StakeCents)
+	if err != nil {
+		mapChallengeErr(w, err)
+		return
+	}
+	writeJSON(w, http.StatusCreated, raise)
+}
+
+func (h ChallengesHandler) ListRaises(w http.ResponseWriter, r *http.Request) {
+	list, err := h.Svc.ListRaises(r.Context(), h.actor(r), r.PathValue("idOrSlug"))
+	if err != nil {
+		mapChallengeErr(w, err)
+		return
+	}
+	writeJSON(w, http.StatusOK, list)
+}
+
+func (h ChallengesHandler) AcceptRaise(w http.ResponseWriter, r *http.Request) {
+	u, ok := middleware.UserFromContext(r.Context())
+	if !ok {
+		writeJSON(w, http.StatusUnauthorized, map[string]string{"error": "unauthorized"})
+		return
+	}
+	raiseID, err := uuid.Parse(r.PathValue("raiseID"))
+	if err != nil {
+		writeJSON(w, http.StatusBadRequest, map[string]string{"error": "invalid_id"})
+		return
+	}
+	raise, err := h.Svc.ResolveRaise(r.Context(), challenges.Actor(u.ID, u.Roles), raiseID, true)
+	if err != nil {
+		mapChallengeErr(w, err)
+		return
+	}
+	writeJSON(w, http.StatusOK, raise)
+}
+
+func (h ChallengesHandler) RefuseRaise(w http.ResponseWriter, r *http.Request) {
+	u, ok := middleware.UserFromContext(r.Context())
+	if !ok {
+		writeJSON(w, http.StatusUnauthorized, map[string]string{"error": "unauthorized"})
+		return
+	}
+	raiseID, err := uuid.Parse(r.PathValue("raiseID"))
+	if err != nil {
+		writeJSON(w, http.StatusBadRequest, map[string]string{"error": "invalid_id"})
+		return
+	}
+	raise, err := h.Svc.ResolveRaise(r.Context(), challenges.Actor(u.ID, u.Roles), raiseID, false)
+	if err != nil {
+		mapChallengeErr(w, err)
+		return
+	}
+	writeJSON(w, http.StatusOK, raise)
+}
+
+func (h ChallengesHandler) PayStakeTopUp(w http.ResponseWriter, r *http.Request) {
+	u, ok := middleware.UserFromContext(r.Context())
+	if !ok {
+		writeJSON(w, http.StatusUnauthorized, map[string]string{"error": "unauthorized"})
+		return
+	}
+	var body paySubmitBody
+	if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
+		writeJSON(w, http.StatusBadRequest, map[string]string{"error": "invalid_json"})
+		return
+	}
+	method := strings.ToLower(strings.TrimSpace(body.Method))
+	last4 := ""
+	if method == "card" && len(body.Number) >= 4 {
+		last4 = body.Number[len(body.Number)-4:]
+	}
+	ch, err := h.Svc.PayStakeTopUp(r.Context(), challenges.Actor(u.ID, u.Roles), r.PathValue("idOrSlug"), method, last4)
+	if err != nil {
+		mapChallengeErr(w, err)
+		return
+	}
+	writeJSON(w, http.StatusOK, ch)
+}
+
 func mapChallengeErr(w http.ResponseWriter, err error) {
 	switch {
 	case errors.Is(err, challenges.ErrNotFound):
@@ -265,6 +365,10 @@ func mapChallengeErr(w http.ResponseWriter, err error) {
 		writeJSON(w, http.StatusPaymentRequired, map[string]string{"error": "payment_required"})
 	case errors.Is(err, challenges.ErrAlreadyPaid):
 		writeJSON(w, http.StatusConflict, map[string]string{"error": "already_paid"})
+	case errors.Is(err, challenges.ErrRaiseNotAllowed):
+		writeJSON(w, http.StatusBadRequest, map[string]string{"error": "raise_not_allowed"})
+	case errors.Is(err, challenges.ErrRaisePending):
+		writeJSON(w, http.StatusConflict, map[string]string{"error": "raise_pending"})
 	case errors.Is(err, challenges.ErrModalityInactive):
 		writeJSON(w, http.StatusBadRequest, map[string]string{"error": "modality_inactive"})
 	case errors.Is(err, challenges.ErrInvalidInput):

@@ -16,6 +16,12 @@ import (
 	"github.com/jackc/pgx/v5/pgxpool"
 )
 
+const (
+	MinStakeCents     = 1000
+	MaxStakeCents     = 1_000_000
+	DefaultStakeCents = 9900
+)
+
 var (
 	ErrNotFound         = errors.New("not found")
 	ErrForbidden        = errors.New("forbidden")
@@ -24,11 +30,13 @@ var (
 	ErrModalityInactive = errors.New("modality inactive")
 	ErrPaymentRequired  = errors.New("payment_required")
 	ErrAlreadyPaid      = errors.New("already_paid")
+	ErrRaiseNotAllowed  = errors.New("raise_not_allowed")
+	ErrRaisePending     = errors.New("raise_pending")
 )
 
 type Service struct {
-	db               *pgxpool.Pool
-	publicURL        string
+	db                 *pgxpool.Pool
+	publicURL          string
 	submissionFeeCents int
 	entryFeeCents      int
 }
@@ -57,35 +65,45 @@ func (s *Service) WithEntryFee(cents int) *Service {
 }
 
 type Challenge struct {
-	ID              uuid.UUID  `json:"id"`
-	Slug            string     `json:"slug"`
-	Title           string     `json:"title"`
-	Description     string     `json:"description"`
-	ModalityID      uuid.UUID  `json:"modality_id"`
-	ModalitySlug    string     `json:"modality_slug"`
-	ModalityName    string     `json:"modality_name"`
-	ArenaID         uuid.UUID  `json:"arena_id"`
-	ArenaSlug       string     `json:"arena_slug"`
-	ArenaName       string     `json:"arena_name"`
-	CreatedBy       uuid.UUID  `json:"created_by"`
-	CreatorUsername string     `json:"creator_username"`
-	CompetitionType string     `json:"competition_type"`
-	Status          string     `json:"status"`
-	Regulation      string     `json:"regulation"`
-	Capacity        int        `json:"capacity"`
-	ConfirmedCount  int        `json:"confirmed_count"`
-	StartsAt        time.Time  `json:"starts_at"`
-	EndsAt          *time.Time `json:"ends_at,omitempty"`
-	CoverAssetID    *uuid.UUID `json:"cover_asset_id,omitempty"`
-	CoverURL        string     `json:"cover_url,omitempty"`
-	IsDemo               bool       `json:"is_demo"`
-	SubmissionFeeCents   int        `json:"submission_fee_cents"`
-	SubmissionPaid       bool       `json:"submission_paid"`
-	EntryFeeCents        int        `json:"entry_fee_cents"`
-	EntryPaidByMe        bool       `json:"entry_paid_by_me"`
-	Derived              Derived    `json:"derived"`
-	CreatedAt            time.Time  `json:"created_at"`
-	UpdatedAt            time.Time  `json:"updated_at"`
+	ID                   uuid.UUID   `json:"id"`
+	Slug                 string      `json:"slug"`
+	Title                string      `json:"title"`
+	Description          string      `json:"description"`
+	ModalityID           uuid.UUID   `json:"modality_id"`
+	ModalitySlug         string      `json:"modality_slug"`
+	ModalityName         string      `json:"modality_name"`
+	ArenaID              uuid.UUID   `json:"arena_id"`
+	ArenaSlug            string      `json:"arena_slug"`
+	ArenaName            string      `json:"arena_name"`
+	CreatedBy            uuid.UUID   `json:"created_by"`
+	CreatorUsername      string      `json:"creator_username"`
+	CompetitionType      string      `json:"competition_type"`
+	Status               string      `json:"status"`
+	Regulation           string      `json:"regulation"`
+	Capacity             int         `json:"capacity"`
+	ConfirmedCount       int         `json:"confirmed_count"`
+	StartsAt             time.Time   `json:"starts_at"`
+	EndsAt               *time.Time  `json:"ends_at,omitempty"`
+	CoverAssetID         *uuid.UUID  `json:"cover_asset_id,omitempty"`
+	CoverURL             string      `json:"cover_url,omitempty"`
+	IsDemo               bool        `json:"is_demo"`
+	StakeCents           int         `json:"stake_cents"`
+	RaisesAllowed        bool        `json:"raises_allowed"`
+	SubmissionFeeCents   int         `json:"submission_fee_cents"`
+	SubmissionPaid       bool        `json:"submission_paid"`
+	CreatorTopUpDueCents int         `json:"creator_topup_due_cents,omitempty"`
+	EntryFeeCents        int         `json:"entry_fee_cents"`
+	EntryPaidByMe        bool        `json:"entry_paid_by_me"`
+	PendingRaise         *StakeRaise `json:"pending_raise,omitempty"`
+	PotCents             int         `json:"pot_cents"`
+	PlatformFeeBPS       int         `json:"platform_fee_bps,omitempty"`
+	Settled              bool        `json:"settled"`
+	WinnerPayoutCents    int         `json:"winner_payout_cents,omitempty"`
+	PlatformFeeCents     int         `json:"platform_fee_cents,omitempty"`
+	WinnerUsername       string      `json:"winner_username,omitempty"`
+	Derived              Derived     `json:"derived"`
+	CreatedAt            time.Time   `json:"created_at"`
+	UpdatedAt            time.Time   `json:"updated_at"`
 }
 
 type Derived struct {
@@ -104,6 +122,18 @@ type CreateInput struct {
 	Capacity        int
 	StartsAt        time.Time
 	EndsAt          *time.Time
+	StakeCents      int
+	RaisesAllowed   bool
+}
+
+func normalizeStake(cents int) (int, error) {
+	if cents == 0 {
+		cents = DefaultStakeCents
+	}
+	if cents < MinStakeCents || cents > MaxStakeCents {
+		return 0, fmt.Errorf("%w: stake_cents must be between %d and %d", ErrInvalidInput, MinStakeCents, MaxStakeCents)
+	}
+	return cents, nil
 }
 
 type ListFilter struct {
@@ -177,6 +207,11 @@ func (s *Service) Create(ctx context.Context, actor IdentityActor, in CreateInpu
 	if strings.TrimSpace(in.Title) == "" || in.Capacity < 1 || in.StartsAt.IsZero() {
 		return Challenge{}, ErrInvalidInput
 	}
+	stake, err := normalizeStake(in.StakeCents)
+	if err != nil {
+		return Challenge{}, err
+	}
+	in.StakeCents = stake
 	if in.CompetitionType == "" {
 		in.CompetitionType = "open"
 	}
@@ -187,7 +222,7 @@ func (s *Service) Create(ctx context.Context, actor IdentityActor, in CreateInpu
 	}
 
 	var modalityActive bool
-	err := s.db.QueryRow(ctx, `SELECT is_active FROM modalities WHERE id = $1`, in.ModalityID).Scan(&modalityActive)
+	err = s.db.QueryRow(ctx, `SELECT is_active FROM modalities WHERE id = $1`, in.ModalityID).Scan(&modalityActive)
 	if err != nil {
 		if errors.Is(err, pgx.ErrNoRows) {
 			return Challenge{}, fmt.Errorf("%w: modality", ErrInvalidInput)
@@ -215,13 +250,15 @@ func (s *Service) Create(ctx context.Context, actor IdentityActor, in CreateInpu
 	_, err = s.db.Exec(ctx, `
 		INSERT INTO challenges (
 			id, slug, title, description, modality_id, arena_id, created_by,
-			competition_type, status, regulation, capacity, starts_at, ends_at
+			competition_type, status, regulation, capacity, starts_at, ends_at,
+			stake_cents, raises_allowed
 		) VALUES (
-			$1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13
+			$1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15
 		)
 	`, id, slug, strings.TrimSpace(in.Title), strings.TrimSpace(in.Description),
 		in.ModalityID, in.ArenaID, actor.ID, in.CompetitionType, StatusDraft,
-		strings.TrimSpace(in.Regulation), in.Capacity, in.StartsAt, in.EndsAt)
+		strings.TrimSpace(in.Regulation), in.Capacity, in.StartsAt, in.EndsAt,
+		in.StakeCents, in.RaisesAllowed)
 	if err != nil {
 		return Challenge{}, err
 	}
@@ -245,6 +282,17 @@ func (s *Service) Update(ctx context.Context, actor IdentityActor, idOrSlug stri
 	if in.CompetitionType == "" {
 		in.CompetitionType = ch.CompetitionType
 	}
+	stake := in.StakeCents
+	if stake == 0 {
+		stake = ch.StakeCents
+	}
+	stake, err = normalizeStake(stake)
+	if err != nil {
+		return Challenge{}, err
+	}
+	if ch.SubmissionPaid && stake != ch.StakeCents {
+		return Challenge{}, fmt.Errorf("%w: stake locked after payment", ErrInvalidInput)
+	}
 	_, err = s.db.Exec(ctx, `
 		UPDATE challenges SET
 			title = $2,
@@ -256,11 +304,13 @@ func (s *Service) Update(ctx context.Context, actor IdentityActor, idOrSlug stri
 			capacity = $8,
 			starts_at = $9,
 			ends_at = $10,
+			stake_cents = $11,
+			raises_allowed = $12,
 			updated_at = now()
 		WHERE id = $1
 	`, ch.ID, strings.TrimSpace(in.Title), strings.TrimSpace(in.Description),
 		in.ModalityID, in.ArenaID, in.CompetitionType, strings.TrimSpace(in.Regulation),
-		in.Capacity, in.StartsAt, in.EndsAt)
+		in.Capacity, in.StartsAt, in.EndsAt, stake, in.RaisesAllowed)
 	if err != nil {
 		return Challenge{}, err
 	}
@@ -316,7 +366,7 @@ func (s *Service) Transition(ctx context.Context, actor IdentityActor, idOrSlug,
 		if !canEdit(actor, ch) {
 			return Challenge{}, ErrForbidden
 		}
-		paid, err := s.isSubmissionPaid(ctx, ch.ID)
+		paid, err := s.isSubmissionPaid(ctx, ch.ID, ch.StakeCents)
 		if err != nil {
 			return Challenge{}, err
 		}
@@ -334,9 +384,9 @@ func (s *Service) Transition(ctx context.Context, actor IdentityActor, idOrSlug,
 			if !canPublish(actor, ch) {
 				return Challenge{}, ErrForbidden
 			}
-			// Owner self-publish also requires the submission fee.
+			// Owner self-publish also requires the stake payment.
 			if ch.CreatedBy == actor.ID && !auth.HasAnyRole(actor.Roles, auth.RoleAdmin, auth.RoleOrganizer) {
-				paid, err := s.isSubmissionPaid(ctx, ch.ID)
+				paid, err := s.isSubmissionPaid(ctx, ch.ID, ch.StakeCents)
 				if err != nil {
 					return Challenge{}, err
 				}
@@ -403,7 +453,7 @@ func (s *Service) List(ctx context.Context, viewer IdentityActor, f ListFilter) 
 		SELECT c.id, c.slug, c.title, c.description, c.modality_id, m.slug, m.name,
 		       c.arena_id, a.slug, a.name, c.created_by, p.username, c.competition_type,
 		       c.status, c.regulation, c.capacity, c.starts_at, c.ends_at, c.cover_asset_id, c.is_demo,
-		       c.created_at, c.updated_at,
+		       c.stake_cents, c.raises_allowed, c.created_at, c.updated_at,
 		       COALESCE((
 		         SELECT COUNT(*) FROM challenge_participants cp
 		         WHERE cp.challenge_id = c.id AND cp.status IN ('confirmed','checked_in')
@@ -507,42 +557,91 @@ func (s *Service) scanChallenge(row scannable) (Challenge, error) {
 		&ch.ID, &ch.Slug, &ch.Title, &ch.Description, &ch.ModalityID, &ch.ModalitySlug, &ch.ModalityName,
 		&ch.ArenaID, &ch.ArenaSlug, &ch.ArenaName, &ch.CreatedBy, &ch.CreatorUsername, &ch.CompetitionType,
 		&ch.Status, &ch.Regulation, &ch.Capacity, &ch.StartsAt, &ch.EndsAt, &ch.CoverAssetID, &ch.IsDemo,
-		&ch.CreatedAt, &ch.UpdatedAt, &ch.ConfirmedCount,
+		&ch.StakeCents, &ch.RaisesAllowed, &ch.CreatedAt, &ch.UpdatedAt, &ch.ConfirmedCount,
 	)
 	if err != nil {
 		return Challenge{}, err
 	}
-	ch.SubmissionFeeCents = s.submissionFeeCents
-	ch.EntryFeeCents = s.entryFeeCents
+	if ch.StakeCents <= 0 {
+		ch.StakeCents = s.submissionFeeCents
+		if ch.StakeCents <= 0 {
+			ch.StakeCents = DefaultStakeCents
+		}
+	}
+	ch.SubmissionFeeCents = ch.StakeCents
+	ch.EntryFeeCents = ch.StakeCents
 	if ch.CoverAssetID != nil && s.publicURL != "" {
 		ch.CoverURL = s.publicURL + "/media/" + ch.CoverAssetID.String()
 	}
 	return ch, nil
 }
 
-func (s *Service) isSubmissionPaid(ctx context.Context, challengeID uuid.UUID) (bool, error) {
-	var paid bool
+func (s *Service) submissionPaidCents(ctx context.Context, challengeID uuid.UUID) (int, error) {
+	var cents int
 	err := s.db.QueryRow(ctx, `
-		SELECT EXISTS(
-			SELECT 1 FROM challenge_submission_payments
-			WHERE challenge_id = $1 AND status = 'paid'
-		)
-	`, challengeID).Scan(&paid)
-	return paid, err
+		SELECT COALESCE(SUM(amount_cents),0)::int FROM challenge_submission_payments
+		WHERE challenge_id = $1 AND status = 'paid'
+	`, challengeID).Scan(&cents)
+	return cents, err
+}
+
+func (s *Service) isSubmissionPaid(ctx context.Context, challengeID uuid.UUID, stakeCents int) (bool, error) {
+	paid, err := s.submissionPaidCents(ctx, challengeID)
+	if err != nil {
+		return false, err
+	}
+	return paid >= stakeCents, nil
 }
 
 func (s *Service) enrichPayment(ctx context.Context, ch *Challenge, viewer IdentityActor) {
-	ch.SubmissionFeeCents = s.submissionFeeCents
-	ch.EntryFeeCents = s.entryFeeCents
-	paid, err := s.isSubmissionPaid(ctx, ch.ID)
+	ch.SubmissionFeeCents = ch.StakeCents
+	ch.EntryFeeCents = ch.StakeCents
+	paidCents, err := s.submissionPaidCents(ctx, ch.ID)
 	if err == nil {
-		ch.SubmissionPaid = paid
+		ch.SubmissionPaid = paidCents >= ch.StakeCents
+		if paidCents > 0 && paidCents < ch.StakeCents {
+			ch.CreatorTopUpDueCents = ch.StakeCents - paidCents
+			ch.SubmissionPaid = false
+		}
 	}
 	if viewer.ID != uuid.Nil {
 		entryPaid, err := s.isEntryPaid(ctx, ch.ID, viewer.ID)
 		if err == nil {
 			ch.EntryPaidByMe = entryPaid
 		}
+	}
+	if raise, err := s.getPendingRaise(ctx, ch.ID); err == nil && raise != nil {
+		ch.PendingRaise = raise
+	}
+
+	var entryPaid int
+	_ = s.db.QueryRow(ctx, `
+		SELECT COALESCE(SUM(amount_cents),0)::int FROM challenge_entry_payments
+		WHERE challenge_id = $1 AND status = 'paid'
+	`, ch.ID).Scan(&entryPaid)
+	ch.PotCents = paidCents + entryPaid
+
+	_ = s.db.QueryRow(ctx, `
+		SELECT COALESCE(value_int, 1000) FROM platform_settings WHERE key = 'pot_platform_fee_bps'
+	`).Scan(&ch.PlatformFeeBPS)
+	if ch.PlatformFeeBPS <= 0 {
+		ch.PlatformFeeBPS = 1000
+	}
+
+	var winnerUser string
+	var fee, payout int
+	err = s.db.QueryRow(ctx, `
+		SELECT s.platform_fee_cents, s.winner_payout_cents, COALESCE(p.username,'')
+		FROM challenge_settlements s
+		LEFT JOIN profiles p ON p.user_id = s.winner_user_id
+		WHERE s.challenge_id = $1 AND s.status = 'released'
+		LIMIT 1
+	`, ch.ID).Scan(&fee, &payout, &winnerUser)
+	if err == nil {
+		ch.Settled = true
+		ch.PlatformFeeCents = fee
+		ch.WinnerPayoutCents = payout
+		ch.WinnerUsername = winnerUser
 	}
 }
 
@@ -562,7 +661,7 @@ func (s *Service) Get(ctx context.Context, idOrSlug string, viewer IdentityActor
 		SELECT c.id, c.slug, c.title, c.description, c.modality_id, m.slug, m.name,
 		       c.arena_id, a.slug, a.name, c.created_by, p.username, c.competition_type,
 		       c.status, c.regulation, c.capacity, c.starts_at, c.ends_at, c.cover_asset_id, c.is_demo,
-		       c.created_at, c.updated_at,
+		       c.stake_cents, c.raises_allowed, c.created_at, c.updated_at,
 		       COALESCE((
 		         SELECT COUNT(*) FROM challenge_participants cp
 		         WHERE cp.challenge_id = c.id AND cp.status IN ('confirmed','checked_in')
@@ -617,26 +716,28 @@ func (s *Service) PayAndSubmit(ctx context.Context, actor IdentityActor, idOrSlu
 		return Challenge{}, ErrInvalidStatus
 	}
 
-	var alreadyPaid bool
+	var paidCents int
 	_ = tx.QueryRow(ctx, `
-		SELECT EXISTS(
-			SELECT 1 FROM challenge_submission_payments
-			WHERE challenge_id = $1 AND status = 'paid'
-		)
-	`, ch.ID).Scan(&alreadyPaid)
+		SELECT COALESCE(SUM(amount_cents),0)::int FROM challenge_submission_payments
+		WHERE challenge_id = $1 AND status = 'paid'
+	`, ch.ID).Scan(&paidCents)
 
-	if !alreadyPaid {
-		payload := map[string]string{"method": method}
+	due := ch.StakeCents - paidCents
+	if due < 0 {
+		due = 0
+	}
+	if due > 0 {
+		payload := map[string]string{"method": method, "kind": "stake"}
 		if last4 != "" {
 			payload["last4"] = last4
 		}
 		raw, _ := json.Marshal(payload)
-		paymentID := fmt.Sprintf("%s-%s", method, ch.ID.String())
+		paymentID := fmt.Sprintf("%s-%s-%d", method, ch.ID.String(), time.Now().UnixNano())
 		_, err = tx.Exec(ctx, `
 			INSERT INTO challenge_submission_payments (
 				id, challenge_id, user_id, amount_cents, currency, method, status, provider_payment_id, raw_payload
 			) VALUES ($1,$2,$3,$4,'BRL',$5,'paid',$6,$7::jsonb)
-		`, uuid.New(), ch.ID, actor.ID, s.submissionFeeCents, method, paymentID, raw)
+		`, uuid.New(), ch.ID, actor.ID, due, method, paymentID, raw)
 		if err != nil {
 			return Challenge{}, err
 		}
@@ -651,8 +752,8 @@ func (s *Service) PayAndSubmit(ctx context.Context, actor IdentityActor, idOrSlu
 	_, _ = tx.Exec(ctx, `
 		INSERT INTO audit_logs (id, actor_user_id, action, entity_type, entity_id, payload)
 		VALUES ($1,$2,'challenge_pay_submit','challenge',$3,
-		        jsonb_build_object('method',$4::text,'amount_cents',$5::int,'to','pending_approval'))
-	`, uuid.New(), actor.ID, ch.ID.String(), method, s.submissionFeeCents)
+		        jsonb_build_object('method',$4::text,'amount_cents',$5::int,'stake_cents',$6::int,'to','pending_approval'))
+	`, uuid.New(), actor.ID, ch.ID.String(), method, due, ch.StakeCents)
 
 	if err := tx.Commit(ctx); err != nil {
 		return Challenge{}, err
