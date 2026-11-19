@@ -13,7 +13,6 @@ export const metadata: Metadata = {
 };
 
 const totalSlots = bsak.classificatorias.reduce((acc, row) => acc + row.slots, 0);
-const totalEntries = bsak.classificatorias.reduce((acc, row) => acc + row.entries, 0);
 
 export default function BsakTournamentPage() {
   return (
@@ -62,8 +61,7 @@ export default function BsakTournamentPage() {
         <h2 className="mt-2 font-display text-3xl text-white md:text-4xl">Do estado à final</h2>
         <p className="mt-3 max-w-2xl text-sm leading-relaxed text-silver md:text-base">
           Corra nas classificatórias pelo Brasil, garanta uma das {totalSlots} vagas para a final e
-          dispute o poço de {bsak.tagline.toLowerCase()}. As etapas somam cerca de {totalEntries}{" "}
-          inscrições previstas na grade.
+          dispute o poço de {bsak.tagline.toLowerCase()}.
         </p>
         <ol className="mt-8 grid gap-6 md:grid-cols-3">
           {[
@@ -99,7 +97,7 @@ export default function BsakTournamentPage() {
           </p>
           <h2 className="mt-2 font-display text-3xl text-white md:text-4xl">Classificatórias</h2>
           <p className="mt-2 text-sm text-silver">
-            Datas, etapas, vagas para a final e grade estimada de inscrições.
+            Datas, etapas e vagas para a final.
           </p>
         </div>
         <div className="overflow-x-auto">
@@ -108,9 +106,7 @@ export default function BsakTournamentPage() {
               <tr>
                 <th className="px-5 py-3 font-medium md:px-8">Quando</th>
                 <th className="px-4 py-3 font-medium">Etapa</th>
-                <th className="px-4 py-3 font-medium">Classificados</th>
-                <th className="px-4 py-3 font-medium">Inscrições</th>
-                <th className="px-5 py-3 font-medium md:px-8">Share</th>
+                <th className="px-5 py-3 font-medium md:px-8">Classificados</th>
               </tr>
             </thead>
             <tbody>
@@ -118,11 +114,7 @@ export default function BsakTournamentPage() {
                 <tr key={row.stage} className="border-t border-white/10">
                   <td className="whitespace-nowrap px-5 py-3 text-silver md:px-8">{row.dates}</td>
                   <td className="px-4 py-3 font-medium text-white">{row.stage}</td>
-                  <td className="px-4 py-3 text-lime">{row.slots}</td>
-                  <td className="px-4 py-3 text-silver">{row.entries}</td>
-                  <td className="px-5 py-3 text-silver md:px-8">
-                    {(row.share * 100).toFixed(1).replace(".", ",")}%
-                  </td>
+                  <td className="px-5 py-3 text-lime md:px-8">{row.slots}</td>
                 </tr>
               ))}
               <tr className="border-t border-lime/30 bg-lime/5">
@@ -130,9 +122,7 @@ export default function BsakTournamentPage() {
                 <td className="px-4 py-3 font-semibold text-white">
                   Finais · {bsak.finals.stage}
                 </td>
-                <td className="px-4 py-3 font-semibold text-lime">{bsak.finals.slots}</td>
-                <td className="px-4 py-3 text-silver">—</td>
-                <td className="px-5 py-3 text-silver md:px-8">100%</td>
+                <td className="px-5 py-3 font-semibold text-lime md:px-8">{bsak.finals.slots}</td>
               </tr>
             </tbody>
           </table>

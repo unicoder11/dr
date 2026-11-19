@@ -1,0 +1,11 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64" role="img" aria-label="DESAFIOS REAIS">
+  <rect width="64" height="64" rx="14" fill="#17191D"/>
+  <text x="8" y="46" font-family="Arial Black, Helvetica Neue, Arial, sans-serif" font-size="36" font-style="italic" font-weight="900" fill="#FFFFFF">D</text>
+  <text x="32" y="46" font-family="Arial Black, Helvetica Neue, Arial, sans-serif" font-size="36" font-style="italic" font-weight="900" fill="#C7F000">R</text>
+  <rect x="48" y="12" width="6" height="6" fill="#FFFFFF"/>
+  <rect x="54" y="12" width="6" height="6" fill="#17191D" stroke="#FFFFFF" stroke-width="0.75"/>
+  <rect x="48" y="18" width="6" height="6" fill="#17191D" stroke="#FFFFFF" stroke-width="0.75"/>
+  <rect x="54" y="18" width="6" height="6" fill="#FFFFFF"/>
+  <rect x="48" y="24" width="6" height="6" fill="#FFFFFF"/>
+  <rect x="54" y="24" width="6" height="6" fill="#17191D" stroke="#FFFFFF" stroke-width="0.75"/>
+</svg>
