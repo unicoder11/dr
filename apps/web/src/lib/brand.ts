@@ -12,5 +12,6 @@ export const brand = {
     challenge: "/brand/the-challenge.png",
     winners: "/brand/triumphant-racer.png",
     sunset: "/brand/complexo-sunset.png",
+    bsak: "/brand/bsak-banner.jpg",
   },
 } as const;

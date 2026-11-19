@@ -25,6 +25,9 @@ export function SiteFooter() {
           <Link href="/como-funciona" className="hover:text-lime">
             Como funciona
           </Link>
+          <Link href="/torneios/bsak" className="hover:text-lime">
+            BSAK 700K
+          </Link>
           <Link href="/contato" className="hover:text-lime">
             Contato
           </Link>

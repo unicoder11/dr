@@ -8,6 +8,7 @@ import { Button } from "@/components/ui/Button";
 import { GlassCard, GlassPanel } from "@/components/ui/Glass";
 import { ScrollProgress } from "@/components/motion/ScrollProgress";
 import { brand } from "@/lib/brand";
+import { bsak } from "@/lib/bsak";
 
 const ease = [0.22, 1, 0.36, 1] as const;
 
@@ -224,6 +225,50 @@ export function HomeClient() {
               </div>
             </motion.div>
           </GlassPanel>
+        </motion.div>
+
+        <motion.div
+          className="mt-4 md:mt-5"
+          initial={{ opacity: 0, y: 20 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ delay: 1.15, duration: 0.75, ease }}
+        >
+          <Link
+            href={bsak.href}
+            className="group relative block overflow-hidden rounded-2xl border border-white/10 outline-none transition hover:border-lime/50 focus-visible:border-lime"
+          >
+            <div className="relative aspect-[3/1] min-h-[140px] w-full sm:min-h-[180px] md:min-h-[220px]">
+              <Image
+                src={bsak.banner}
+                alt={`${bsak.name} — ${bsak.tagline}`}
+                fill
+                className="object-cover object-center transition duration-700 group-hover:scale-[1.03]"
+                sizes="(max-width: 1280px) 100vw, 1280px"
+                priority
+              />
+              <div className="absolute inset-0 bg-gradient-to-r from-racing/75 via-racing/25 to-transparent" />
+              <div className="absolute inset-0 bg-gradient-to-t from-racing/60 via-transparent to-racing/10" />
+            </div>
+            <div className="absolute inset-0 flex flex-col justify-end p-4 sm:p-5 md:p-7">
+              <p className="text-[10px] font-semibold uppercase tracking-[0.32em] text-lime">
+                Torneio · {bsak.name}
+              </p>
+              <div className="mt-1 flex flex-wrap items-end justify-between gap-3">
+                <div>
+                  <p className="font-display text-2xl uppercase tracking-wide text-white sm:text-3xl md:text-4xl">
+                    {bsak.guaranteed}
+                  </p>
+                  <p className="mt-1 max-w-md text-xs text-silver sm:text-sm">
+                    {bsak.fullNamePt} · classificatórias, finais e premiação
+                  </p>
+                </div>
+                <span className="inline-flex items-center gap-2 rounded-full border border-lime/40 bg-lime/15 px-3 py-1.5 text-xs font-semibold uppercase tracking-wide text-lime transition group-hover:bg-lime group-hover:text-racing">
+                  Ver torneio
+                  <span aria-hidden>→</span>
+                </span>
+              </div>
+            </div>
+          </Link>
         </motion.div>
       </div>
     </div>
