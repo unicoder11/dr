@@ -38,6 +38,47 @@ export function HomeClient() {
       </div>
 
       <div className="mx-auto max-w-[1280px] px-3 pb-6 pt-[5.5rem] md:px-6 md:pb-10 md:pt-28">
+        <div className="mb-3 grid gap-2 sm:mb-4 sm:grid-cols-2 sm:gap-3">
+          {TOURNAMENT_BANNERS.map((t, i) => (
+            <motion.div
+              key={t.href}
+              initial={{ opacity: 0, y: 16 }}
+              animate={{ opacity: 1, y: 0 }}
+              transition={{ delay: 0.05 + i * 0.08, duration: 0.55, ease }}
+            >
+              <Link
+                href={t.href}
+                className="group relative block overflow-hidden rounded-xl border border-white/10 outline-none transition hover:border-lime/50 focus-visible:border-lime"
+              >
+                <div className="relative aspect-[21/7] min-h-[72px] w-full sm:min-h-[88px] md:min-h-[100px]">
+                  <Image
+                    src={t.banner}
+                    alt={`${t.name} — ${t.tagline}`}
+                    fill
+                    className="object-cover object-center transition duration-500 group-hover:scale-[1.03]"
+                    sizes="(max-width: 640px) 100vw, 640px"
+                    priority
+                  />
+                  <div className="absolute inset-0 bg-gradient-to-r from-racing/80 via-racing/35 to-transparent" />
+                </div>
+                <div className="absolute inset-0 flex items-end justify-between gap-2 p-2.5 sm:p-3">
+                  <div className="min-w-0">
+                    <p className="text-[9px] font-semibold uppercase tracking-[0.28em] text-lime">
+                      {t.name}
+                    </p>
+                    <p className="truncate font-display text-lg uppercase tracking-wide text-white sm:text-xl">
+                      {t.guaranteed}
+                    </p>
+                  </div>
+                  <span className="shrink-0 rounded-full border border-lime/40 bg-lime/15 px-2.5 py-1 text-[10px] font-semibold uppercase tracking-wide text-lime transition group-hover:bg-lime group-hover:text-racing">
+                    Ver →
+                  </span>
+                </div>
+              </Link>
+            </motion.div>
+          ))}
+        </div>
+
         <motion.div
           initial={{ opacity: 0, y: 28, scale: 0.98 }}
           animate={{ opacity: 1, y: 0, scale: 1 }}
@@ -229,54 +270,6 @@ export function HomeClient() {
             </motion.div>
           </GlassPanel>
         </motion.div>
-
-        <div className="mt-4 space-y-3 md:mt-5 md:space-y-4">
-          {TOURNAMENT_BANNERS.map((t, i) => (
-            <motion.div
-              key={t.href}
-              initial={{ opacity: 0, y: 20 }}
-              animate={{ opacity: 1, y: 0 }}
-              transition={{ delay: 1.15 + i * 0.12, duration: 0.75, ease }}
-            >
-              <Link
-                href={t.href}
-                className="group relative block overflow-hidden rounded-2xl border border-white/10 outline-none transition hover:border-lime/50 focus-visible:border-lime"
-              >
-                <div className="relative aspect-[3/1] min-h-[140px] w-full sm:min-h-[180px] md:min-h-[220px]">
-                  <Image
-                    src={t.banner}
-                    alt={`${t.name} — ${t.tagline}`}
-                    fill
-                    className="object-cover object-center transition duration-700 group-hover:scale-[1.03]"
-                    sizes="(max-width: 1280px) 100vw, 1280px"
-                    priority={i === 0}
-                  />
-                  <div className="absolute inset-0 bg-gradient-to-r from-racing/75 via-racing/25 to-transparent" />
-                  <div className="absolute inset-0 bg-gradient-to-t from-racing/60 via-transparent to-racing/10" />
-                </div>
-                <div className="absolute inset-0 flex flex-col justify-end p-4 sm:p-5 md:p-7">
-                  <p className="text-[10px] font-semibold uppercase tracking-[0.32em] text-lime">
-                    Torneio · {t.name}
-                  </p>
-                  <div className="mt-1 flex flex-wrap items-end justify-between gap-3">
-                    <div>
-                      <p className="font-display text-2xl uppercase tracking-wide text-white sm:text-3xl md:text-4xl">
-                        {t.guaranteed}
-                      </p>
-                      <p className="mt-1 max-w-md text-xs text-silver sm:text-sm">
-                        {t.fullNamePt} · classificatórias, finais e premiação
-                      </p>
-                    </div>
-                    <span className="inline-flex items-center gap-2 rounded-full border border-lime/40 bg-lime/15 px-3 py-1.5 text-xs font-semibold uppercase tracking-wide text-lime transition group-hover:bg-lime group-hover:text-racing">
-                      Ver torneio
-                      <span aria-hidden>→</span>
-                    </span>
-                  </div>
-                </div>
-              </Link>
-            </motion.div>
-          ))}
-        </div>
       </div>
     </div>
   );

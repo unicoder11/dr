@@ -8,7 +8,7 @@ export const basq = {
   banner: "/brand/basq-banner.jpg",
   href: "/torneios/basq",
   finals: {
-    dates: "9 / 10 / 11 JUL",
+    dates: "16 / 17 / 18 OUT",
     stage: "Rio de Janeiro",
     slots: 60,
   },
