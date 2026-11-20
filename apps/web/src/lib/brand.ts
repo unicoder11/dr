@@ -13,6 +13,6 @@ export const brand = {
     winners: "/brand/triumphant-racer.png",
     sunset: "/brand/complexo-sunset.png",
     bsak: "/brand/bsak-banner.jpg",
-    basq: "/brand/basq-banner-v2.jpg",
+    basq: "/brand/basq-banner-v3.jpg",
   },
 } as const;

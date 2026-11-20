@@ -5,7 +5,7 @@ export const basq = {
   tagline: "R$ 300 mil em premiação garantida",
   guaranteed: "300K GARANTIDO",
   entryFeeReais: 200,
-  banner: "/brand/basq-banner-v2.jpg",
+  banner: "/brand/basq-banner-v3.jpg",
   href: "/torneios/basq",
   finals: {
     dates: "16 / 17 / 18 OUT",
